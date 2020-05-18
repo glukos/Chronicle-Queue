@@ -321,7 +321,7 @@ public class SingleChronicleQueueExcerpts {
             final Wire w = wireType.apply(store.bytes());
             if (store.dataVersion() > 0)
                 w.usePadding(true);
-            w.bytes().reserve();
+            //    w.bytes().reserve();
             return w;
         }
 
@@ -1521,8 +1521,8 @@ public class SingleChronicleQueueExcerpts {
                 //   queue.release(store);
 
                 if (this.store != wireStore) {
-                    closableResources.storeReference(wireStore);
                     this.store = wireStore;
+                    closableResources.storeReference(wireStore);
                     resetWires();
                 }
                 // give the position of the last entry and
@@ -1577,10 +1577,6 @@ public class SingleChronicleQueueExcerpts {
             closableResources.wireReference(wire);
             assert !CHECK_INDEX || headerNumberCheck((AbstractWire) wireForIndex);
             assert wire != wireForIndexOld;
-
-            if (wireForIndexOld != null) {
-                releaseWireResources(wireForIndexOld);
-            }
         }
 
         @NotNull
@@ -1632,8 +1628,8 @@ public class SingleChronicleQueueExcerpts {
                 //    queue.release(store);
 
                 if (this.store != wireStore) {
-                    closableResources.storeReference(wireStore);
                     this.store = wireStore;
+                    closableResources.storeReference(wireStore);
                     resetWires();
                 }
                 // give the position of the last entry and
