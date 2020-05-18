@@ -307,19 +307,13 @@ public class SingleChronicleQueueExcerpts {
         private void resetWires(@NotNull final ChronicleQueue queue) {
             WireType wireType = queue.wireType();
             {
-                Wire oldw = this.wire;
-                this.wire = store == null ? null : createWire(wireType);
-                closableResources.wireReference(this.wire == null ? null : this.wire);
 
+                this.wire = store == null ? null : createWire(wireType);
+                closableResources.wireReference(this.wire);
             }
             {
-                Wire old = this.wireForIndex;
                 this.wireForIndex = store == null ? null : createWire(wireType);
-                closableResources.wireForIndexReference(this.wireForIndex == null ? null : wireForIndex);
-                assert wire != old || wire == null;
-                if (old != null) {
-                    releaseWireResources(old);
-                }
+                closableResources.wireForIndexReference(wireForIndex);
             }
         }
 
