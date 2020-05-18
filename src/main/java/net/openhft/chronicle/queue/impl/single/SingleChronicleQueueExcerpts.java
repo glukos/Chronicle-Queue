@@ -284,10 +284,9 @@ public class SingleChronicleQueueExcerpts {
 
             this.store = storePool.acquire(cycle, queue.epoch(), createIfAbsent);
 
-
-            if (store != null) {
-                storePool.release(store);
-            }
+            //   if (store != null) {
+            //      storePool.release(store);
+            //  }
             closableResources.storeReference(this.store);
             resetWires(queue);
 
@@ -328,6 +327,7 @@ public class SingleChronicleQueueExcerpts {
             final Wire w = wireType.apply(store.bytes());
             if (store.dataVersion() > 0)
                 w.usePadding(true);
+            w.bytes().reserve();
             return w;
         }
 
@@ -1231,8 +1231,8 @@ public class SingleChronicleQueueExcerpts {
 
         private boolean nextCycleNotFound() {
             if (index() == Long.MIN_VALUE) {
-                if (this.store != null)
-                    queue.release(this.store);
+                // if (this.store != null)
+                //       queue.release(this.store);
                 this.store = null;
                 closableResources.storeReference(null);
                 return false;
@@ -1523,12 +1523,12 @@ public class SingleChronicleQueueExcerpts {
                 if (wireStore == null)
                     throw new IllegalStateException("Store not found for cycle " + Long.toHexString(lastCycle) + ". Probably the files were removed?");
 
-                if (store != null)
-                    queue.release(store);
+                // if (store != null)
+                //   queue.release(store);
 
                 if (this.store != wireStore) {
-                    this.store = wireStore;
                     closableResources.storeReference(wireStore);
+                    this.store = wireStore;
                     resetWires();
                 }
                 // give the position of the last entry and
@@ -1634,12 +1634,12 @@ public class SingleChronicleQueueExcerpts {
                 if (wireStore == null)
                     throw new IllegalStateException("Store not found for cycle " + Long.toHexString(lastCycle) + ". Probably the files were removed? lastCycle=" + lastCycle);
 
-                if (store != null)
-                    queue.release(store);
+                // if (store != null)
+                //    queue.release(store);
 
                 if (this.store != wireStore) {
-                    this.store = wireStore;
                     closableResources.storeReference(wireStore);
+                    this.store = wireStore;
                     resetWires();
                 }
                 // give the position of the last entry and
@@ -1840,8 +1840,8 @@ public class SingleChronicleQueueExcerpts {
                 return false;
             }
 
-            if (store != null)
-                queue.release(store);
+            //   if (store != null)
+            //     queue.release(store);
 
             if (nextStore == store)
                 return true;
@@ -1860,7 +1860,7 @@ public class SingleChronicleQueueExcerpts {
 
         void release() {
             if (store != null) {
-                queue.release(store);
+                //   queue.release(store);
                 store = null;
                 closableResources.storeReference(null);
             }
