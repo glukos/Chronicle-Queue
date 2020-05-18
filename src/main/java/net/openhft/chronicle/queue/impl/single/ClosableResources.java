@@ -16,7 +16,7 @@ final class ClosableResources<T extends StoreReleasable> {
     private AtomicReference<Wire> wireForIndexReference = new AtomicReference<>();
     private AtomicReference<CommonStore> storeReference = new AtomicReference<>();
 
-    private ClosableResources(@NotNull final T storeReleasable) {
+    ClosableResources(@NotNull final T storeReleasable) {
         this.storeReleasable = storeReleasable;
     }
 
