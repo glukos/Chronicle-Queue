@@ -1573,6 +1573,7 @@ public class SingleChronicleQueueExcerpts {
 
             final Wire wireForIndexOld = wireForIndex;
             wireForIndex = readAnywhere(wireType.apply(store().bytes()));
+            wire.bytes().reserve();
             closableResources.wireForIndexReference(wireForIndex);
             closableResources.wireReference(wire);
             assert !CHECK_INDEX || headerNumberCheck((AbstractWire) wireForIndex);
@@ -1830,11 +1831,11 @@ public class SingleChronicleQueueExcerpts {
                 return false;
             }
 
-            //   if (store != null)
-            //     queue.release(store);
-
-            if (nextStore == store)
+            if (nextStore == store) {
+                if (store != null)
+                    queue.release(store);
                 return true;
+            }
 
             context.wire(null);
             store = nextStore;
