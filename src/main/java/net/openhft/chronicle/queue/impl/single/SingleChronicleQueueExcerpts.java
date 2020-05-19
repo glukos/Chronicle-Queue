@@ -1574,7 +1574,7 @@ public class SingleChronicleQueueExcerpts {
 
             final Wire wireForIndexOld = wireForIndex;
             wireForIndex = readAnywhere(wireType.apply(store().bytes()));
-//            wire.bytes().reserve();
+            wire.bytes().reserve();
             closableResources.wireForIndexReference(wireForIndex);
             closableResources.wireReference(wire);
             assert !CHECK_INDEX || headerNumberCheck((AbstractWire) wireForIndex);
