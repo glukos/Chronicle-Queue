@@ -52,6 +52,7 @@ import static net.openhft.chronicle.wire.Wires.*;
 
 @SuppressWarnings({"ConstantConditions", "rawtypes"})
 public class SingleChronicleQueueExcerpts {
+
     private static final boolean CHECK_INDEX = Boolean.getBoolean("queue.check.index");
     private static final Logger LOG = LoggerFactory.getLogger(SingleChronicleQueueExcerpts.class);
     private static final int MESSAGE_HISTORY_METHOD_ID = -1;
