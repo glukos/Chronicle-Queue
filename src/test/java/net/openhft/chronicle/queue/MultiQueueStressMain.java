@@ -1,9 +1,9 @@
 package net.openhft.chronicle.queue;
 
-import net.openhft.chronicle.core.annotation.RequiredForClient;
 import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.OS;
+import net.openhft.chronicle.core.annotation.RequiredForClient;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -30,7 +30,7 @@ public class MultiQueueStressMain {
             for (int i = 0; i < queueCount; i++) {
                 long start1 = System.currentTimeMillis();
                 String filename = baseDir + "/" + count++;
-                queues[i] = MappedBytes.mappedBytes(filename, pagesPer10Second * (4 << 10));
+                queues[i] = MappedBytes.mappedBytes(new File(filename), pagesPer10Second * (4 << 10));
                 long time1 = System.currentTimeMillis() - start1;
                 if (time1 > 20)
                     System.out.printf("Creating %s took %.3f seconds%n", filename, time1 / 1e3);
@@ -43,7 +43,7 @@ public class MultiQueueStressMain {
             }
             long mid2 = System.currentTimeMillis();
             for (MappedBytes bytes : queues) {
-                bytes.release();
+                bytes.releaseLast();
             }
             long end0 = System.currentTimeMillis();
             long time0 = end0 - start0;

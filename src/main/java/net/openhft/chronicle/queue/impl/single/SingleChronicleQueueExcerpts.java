@@ -19,6 +19,7 @@ package net.openhft.chronicle.queue.impl.single;
 import net.openhft.chronicle.bytes.*;
 import net.openhft.chronicle.bytes.util.DecoratedBufferUnderflowException;
 import net.openhft.chronicle.core.Jvm;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.annotation.PackageLocal;
 import net.openhft.chronicle.core.io.IORuntimeException;
 import net.openhft.chronicle.core.pool.StringBuilderPool;
@@ -72,9 +73,13 @@ public class SingleChronicleQueueExcerpts {
         void writeBytes(long index, BytesStore bytes);
     }
 
-    private static void releaseIfNotNullAndReferenced(@Nullable final Bytes bytesReference) {
+    static void releaseIfNotNullAndReferenced(@Nullable final Bytes bytesReference, ReferenceOwner id) {
         if (bytesReference != null) {
-            bytesReference.release();
+            try {
+                bytesReference.release(id);
+            } catch (IllegalStateException e) {
+                Jvm.warn().on(SingleChronicleQueueExcerpts.class, e);
+            }
         }
     }
 
@@ -84,7 +89,7 @@ public class SingleChronicleQueueExcerpts {
 //
 // *************************************************************************
 
-    static class StoreAppender implements ExcerptAppender, ExcerptContext, InternalAppender {
+    static class StoreAppender implements ExcerptAppender, ExcerptContext, InternalAppender, ReferenceOwner {
         @NotNull
         private final SingleChronicleQueue queue;
         @NotNull
@@ -118,7 +123,7 @@ public class SingleChronicleQueueExcerpts {
             this.checkInterrupts = checkInterrupts;
             this.writeLock = queue.writeLock();
             this.context = new StoreAppenderContext();
-            this.closableResources = new ClosableResources<>(storePool);
+            this.closableResources = new ClosableResources<>(this, storePool);
 
             // always put references to "this" last.
             queue.addCloseListener(this, StoreAppender::close);
@@ -162,16 +167,16 @@ public class SingleChronicleQueueExcerpts {
                 final Wire w0 = wireForIndex;
                 wireForIndex = null;
                 if (w0 != null)
-                    releaseIfNotNullAndReferenced(w0.bytes());
+                    releaseIfNotNullAndReferenced(w0.bytes(), INIT);
                 final Wire w = wire;
                 wire = null;
                 if (w != null)
-                    releaseIfNotNullAndReferenced(w.bytes());
+                    releaseIfNotNullAndReferenced(w.bytes(), INIT);
                 if (pretoucher != null)
                     pretoucher.close();
 
                 if (store != null) {
-                    storePool.release(store);
+                    storePool.release(this, store);
                 }
                 store = null;
                 storePool.close();
@@ -280,11 +285,10 @@ public class SingleChronicleQueueExcerpts {
 
             WireStore store = this.store;
 
-            this.store = storePool.acquire(cycle, queue.epoch(), createIfAbsent);
-
+            this.store = storePool.acquire(this, cycle, queue.epoch(), createIfAbsent);
 
             if (store != null) {
-                storePool.release(store);
+                storePool.release(this, store);
             }
             closableResources.storeReference = this.store;
             resetWires(queue);
@@ -874,6 +878,7 @@ public class SingleChronicleQueueExcerpts {
     }
 
     private static final class ClosableResources<T extends StoreReleasable> {
+        private final ReferenceOwner owner;
         @NotNull
         private final T storeReleasable;
         private final AtomicBoolean released = new AtomicBoolean();
@@ -881,27 +886,28 @@ public class SingleChronicleQueueExcerpts {
         private volatile Bytes wireForIndexReference = null;
         private volatile CommonStore storeReference = null;
 
-        private ClosableResources(@NotNull final T storeReleasable) {
+        private ClosableResources(ReferenceOwner owner, @NotNull final T storeReleasable) {
+            this.owner = owner;
             this.storeReleasable = storeReleasable;
         }
 
-        private static void releaseIfNotNull(final Bytes bytesReference) {
+        private static void releaseIfNotNull(final Bytes bytesReference, ReferenceOwner id) {
             // Object is no longer reachable
             if (bytesReference != null) {
-                bytesReference.release();
+                bytesReference.release(id);
             }
         }
 
-        private void releaseResources() {
+        void releaseResources() {
             if (released.compareAndSet(false, true)) {
-                releaseIfNotNull(wireForIndexReference);
-                releaseIfNotNull(wireReference);
+                releaseIfNotNull(wireForIndexReference, owner);
+                releaseIfNotNull(wireReference, owner);
 
                 // Object is no longer reachable, check that it has not already been released
                 CommonStore storeReference = this.storeReference;
 
                 if (storeReference != null) {
-                    storeReleasable.release(storeReference);
+                    storeReleasable.release(owner, storeReference);
                 }
             }
         }
@@ -910,7 +916,7 @@ public class SingleChronicleQueueExcerpts {
     /**
      * Tailer
      */
-    public static class StoreTailer implements ExcerptTailer, SourceContext, ExcerptContext {
+    public static class StoreTailer implements ExcerptTailer, SourceContext, ExcerptContext, ReferenceOwner {
         static final int INDEXING_LINEAR_SCAN_THRESHOLD = 70;
         @NotNull
         private final SingleChronicleQueue queue;
@@ -942,7 +948,7 @@ public class SingleChronicleQueueExcerpts {
             this.setCycle(Integer.MIN_VALUE);
             this.index = 0;
             queue.addCloseListener(this, StoreTailer::close);
-            closableResources = new ClosableResources<>(queue);
+            closableResources = new ClosableResources<>(this, queue);
 
             if (indexValue == null) {
                 toStart();
@@ -1023,10 +1029,10 @@ public class SingleChronicleQueueExcerpts {
                 context.wire(null);
                 final Wire w0 = wireForIndex;
                 if (w0 != null)
-                    releaseIfNotNullAndReferenced(w0.bytes());
+                    releaseIfNotNullAndReferenced(w0.bytes(), this);
                 wireForIndex = null;
                 if (store != null) {
-                    queue.release(store);
+                    queue.release(this, store);
                 }
                 store = null;
             }
@@ -1267,7 +1273,7 @@ public class SingleChronicleQueueExcerpts {
         private boolean nextCycleNotFound() {
             if (index() == Long.MIN_VALUE) {
                 if (this.store != null)
-                    queue.release(this.store);
+                    queue.release(this, this.store);
                 this.store = null;
                 closableResources.storeReference = null;
                 return false;
@@ -1553,15 +1559,15 @@ public class SingleChronicleQueueExcerpts {
                 if (lastCycle == Integer.MIN_VALUE)
                     return Long.MIN_VALUE;
 
-                final WireStore wireStore = queue.storeForCycle(lastCycle, queue.epoch(), false);
+                final WireStore wireStore = queue.storeForCycle(this, lastCycle, queue.epoch(), false);
                 this.setCycle(lastCycle);
                 if (wireStore == null)
                     throw new IllegalStateException("Store not found for cycle " + Long.toHexString(lastCycle) + ". Probably the files were removed?");
 
-                if (store != null)
-                    queue.release(store);
 
                 if (this.store != wireStore) {
+                    if (store != null)
+                        queue.release(this, store);
                     this.store = wireStore;
                     closableResources.storeReference = wireStore;
                     resetWires();
@@ -1607,13 +1613,17 @@ public class SingleChronicleQueueExcerpts {
         private void resetWires() {
             final WireType wireType = queue.wireType();
 
-            final AbstractWire wire = (AbstractWire) readAnywhere(wireType.apply(store.bytes()));
+            MappedBytes mbytes = store.bytes();
+            mbytes.reserve(this);
+            final AbstractWire wire = (AbstractWire) readAnywhere(wireType.apply(mbytes));
             assert !CHECK_INDEX || headerNumberCheck(wire);
             this.context.wire(wire);
             wire.parent(this);
 
             final Wire wireForIndexOld = wireForIndex;
-            wireForIndex = readAnywhere(wireType.apply(store().bytes()));
+            MappedBytes bytes = store().bytes();
+            bytes.reserveTransfer(INIT, this);
+            wireForIndex = readAnywhere(wireType.apply(bytes));
             closableResources.wireForIndexReference = wireForIndex.bytes();
             closableResources.wireReference = wire.bytes();
             assert !CHECK_INDEX || headerNumberCheck((AbstractWire) wireForIndex);
@@ -1664,13 +1674,13 @@ public class SingleChronicleQueueExcerpts {
                     return this;
                 }
 
-                final WireStore wireStore = queue.storeForCycle(lastCycle, queue.epoch(), false);
+                final WireStore wireStore = queue.storeForCycle(this, lastCycle, queue.epoch(), false);
                 this.setCycle(lastCycle);
                 if (wireStore == null)
                     throw new IllegalStateException("Store not found for cycle " + Long.toHexString(lastCycle) + ". Probably the files were removed? lastCycle=" + lastCycle);
 
                 if (store != null)
-                    queue.release(store);
+                    queue.release(this, store);
 
                 if (this.store != wireStore) {
                     this.store = wireStore;
@@ -1862,7 +1872,7 @@ public class SingleChronicleQueueExcerpts {
             if (this.cycle == cycle && state == FOUND_CYCLE)
                 return true;
 
-            final WireStore nextStore = queue.storeForCycle(cycle, queue.epoch(), false);
+            final WireStore nextStore = queue.storeForCycle(this, cycle, queue.epoch(), false);
 
             if (nextStore == null && store == null)
                 return false;
@@ -1875,11 +1885,11 @@ public class SingleChronicleQueueExcerpts {
                 return false;
             }
 
-            if (store != null)
-                queue.release(store);
-
             if (nextStore == store)
                 return true;
+
+            if (store != null)
+                queue.release(this, store);
 
             context.wire(null);
             store = nextStore;
@@ -1895,7 +1905,7 @@ public class SingleChronicleQueueExcerpts {
 
         void release() {
             if (store != null) {
-                queue.release(store);
+                queue.release(this, store);
                 store = null;
                 closableResources.storeReference = null;
             }

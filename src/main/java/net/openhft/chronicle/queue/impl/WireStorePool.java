@@ -16,36 +16,25 @@
 package net.openhft.chronicle.queue.impl;
 
 import net.openhft.chronicle.core.Jvm;
-import net.openhft.chronicle.queue.RollDetails;
+import net.openhft.chronicle.core.ReferenceOwner;
+import net.openhft.chronicle.core.StackTrace;
 import net.openhft.chronicle.queue.TailerDirection;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.lang.ref.Reference;
-import java.lang.ref.WeakReference;
 import java.text.ParseException;
-import java.util.Map;
 import java.util.NavigableSet;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class WireStorePool implements StoreReleasable {
-    // must be power-of-two
-    private static final int ROLL_CYCLE_CACHE_SIZE = 64;
-    private static final int INDEX_MASK = ROLL_CYCLE_CACHE_SIZE - 1;
     @NotNull
     private final WireStoreSupplier supplier;
-    @NotNull
-    private final Map<RollDetails, WeakReference<WireStore>> stores;
     private final StoreFileListener storeFileListener;
-    // protected by synchronized on acquire()
-    private final RollDetails[] cache = new RollDetails[ROLL_CYCLE_CACHE_SIZE];
     private boolean isClosed = false;
+    private StackTrace closedHere;
 
     private WireStorePool(@NotNull WireStoreSupplier supplier, StoreFileListener storeFileListener) {
         this.supplier = supplier;
         this.storeFileListener = storeFileListener;
-        this.stores = new ConcurrentHashMap<>();
     }
 
     @NotNull
@@ -53,51 +42,21 @@ public class WireStorePool implements StoreReleasable {
         return new WireStorePool(supplier, storeFileListener);
     }
 
-    private static int cacheIndex(final int cycle) {
-        return cycle & INDEX_MASK;
-    }
-
-    public synchronized void close() {
+    public void close() {
         if (isClosed)
             return;
         isClosed = true;
-
-        stores.values().stream()
-                .map(Reference::get)
-                .filter(Objects::nonNull)
-                .forEach(this::release);
+        closedHere = Jvm.isReferenceTracing() ? new StackTrace() : null;
     }
 
     @Nullable
-    public synchronized WireStore acquire(final int cycle, final long epoch, boolean createIfAbsent) {
-        final int cacheIndex = cacheIndex(cycle);
-        RollDetails rollDetails;
-        rollDetails = cache[cacheIndex];
-        if (rollDetails == null || rollDetails.cycle() != cycle) {
-            rollDetails = new RollDetails(cycle, epoch);
-            cache[cacheIndex] = rollDetails;
-        }
-
-        WeakReference<WireStore> reference = stores.get(rollDetails);
-        WireStore store;
-        if (reference != null) {
-            store = reference.get();
-            if (store != null) {
-                if (store.tryReserve())
-                    return store;
-                else
-                    /// this should never happen,
-                    // this method is synchronized
-                    // and this remove below, is only any use if the acquire method below that fails
-                    Jvm.warn().on(getClass(), "Logic failure - should never happen " + store);
-                stores.remove(rollDetails);
-            }
-        }
-
-        store = this.supplier.acquire(cycle, createIfAbsent);
+    public WireStore acquire(ReferenceOwner owner, final int cycle, final long epoch, boolean createIfAbsent) {
+        if (isClosed)
+            throw new IllegalStateException("Closed", closedHere);
+        WireStore store = this.supplier.acquire(cycle, createIfAbsent);
         if (store != null) {
-            stores.put(rollDetails, new WeakReference<>(store));
             storeFileListener.onAcquired(cycle, store.file());
+            store.reserveTransfer(ReferenceOwner.INIT, owner);
         }
         return store;
     }
@@ -107,23 +66,12 @@ public class WireStorePool implements StoreReleasable {
     }
 
     @Override
-    public synchronized void release(@NotNull CommonStore store) {
-
-        store.release();
-
-        long refCount = store.refCount();
-        assert refCount >= 0;
-        if (refCount == 0) {
-            for (Map.Entry<RollDetails, WeakReference<WireStore>> entry : stores.entrySet()) {
-                WeakReference<WireStore> ref = entry.getValue();
-                if (ref != null && ref.get() == store) {
-                    stores.remove(entry.getKey());
-                    storeFileListener.onReleased(entry.getKey().cycle(), store.file());
-                    return;
-                }
-            }
-            if (Jvm.isDebugEnabled(getClass()))
-                Jvm.debug().on(getClass(), "Store was not registered: " + store.file());
+    public void release(ReferenceOwner ro, @NotNull CommonStore store) {
+        store.release(ro);
+        if (store instanceof WireStore) {
+            WireStore wireStore = (WireStore) store;
+            if (storeFileListener != null)
+                storeFileListener.onReleased(wireStore.cycle(), store.file());
         }
     }
 
@@ -136,9 +84,5 @@ public class WireStorePool implements StoreReleasable {
      */
     public NavigableSet<Long> listCyclesBetween(int lowerCycle, int upperCycle) throws ParseException {
         return supplier.cycles(lowerCycle, upperCycle);
-    }
-
-    public boolean isEmpty() {
-        return stores.isEmpty();
     }
 }

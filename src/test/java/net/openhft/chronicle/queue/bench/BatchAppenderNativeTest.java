@@ -46,7 +46,7 @@ public class BatchAppenderNativeTest {
                 }
             }
         } finally {
-            bytes.release();
+            bytes.releaseLast();
         }
     }
 }

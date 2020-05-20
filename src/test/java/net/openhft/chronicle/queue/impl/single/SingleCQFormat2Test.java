@@ -19,7 +19,6 @@ package net.openhft.chronicle.queue.impl.single;
 import net.openhft.chronicle.bytes.Bytes;
 import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.bytes.MappedFile;
-import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.pool.ClassAliasPool;
 import net.openhft.chronicle.core.threads.ThreadDump;
 import net.openhft.chronicle.queue.*;
@@ -39,7 +38,6 @@ import java.util.TreeMap;
 
 import static net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder.binary;
 import static org.junit.Assert.*;
-import static org.junit.Assume.assumeFalse;
 
 public class SingleCQFormat2Test extends ChronicleQueueTestBase {
 
@@ -233,7 +231,7 @@ public class SingleCQFormat2Test extends ChronicleQueueTestBase {
         @NotNull MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE);
         bytes.readLimit(bytes.realCapacity());
         assertEquals(expected, Wires.fromAlignedSizePrefixedBlobs(bytes));
-        bytes.release();
+        bytes.releaseLast();
     }
 
     @Test
@@ -661,7 +659,7 @@ public class SingleCQFormat2Test extends ChronicleQueueTestBase {
                 Bytes bytes = Bytes.elasticByteBuffer();
                 new BinaryWire(bytes).write(() -> "msg").text(msg);
                 appender.writeBytes(bytes);
-                bytes.release();
+                bytes.releaseLast();
 
                 break;
 

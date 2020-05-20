@@ -17,9 +17,11 @@
  */
 package net.openhft.chronicle.queue.impl;
 
+import net.openhft.chronicle.core.ReferenceOwner;
+
 public interface StoreReleasable {
     /**
      * @param store the {@code store} to release
      */
-    void release(CommonStore store);
+    void release(ReferenceOwner ro, CommonStore store);
 }

@@ -183,10 +183,10 @@ public class ChronicleQueueIndexTest {
 
         Bytes<byte[]> hello_world = Bytes.fromString("Hello World 1");
         appender.writeBytes(RollCycles.DAILY.toIndex(18264, 0L), hello_world);
-        hello_world.release();
+        hello_world.releaseLast();
         hello_world = Bytes.fromString("Hello World 2");
         appender.writeBytes(RollCycles.DAILY.toIndex(18264, 1L), hello_world);
-        hello_world.release();
+        hello_world.releaseLast();
 
         // Simulate the end of the day i.e the queue closes the day rolls
         // (note the change of index from 18264 to 18265)
@@ -200,7 +200,7 @@ public class ChronicleQueueIndexTest {
         // add a message for the new day
         hello_world = Bytes.fromString("Hello World 3");
         appender.writeBytes(RollCycles.DAILY.toIndex(18265, 0L), hello_world);
-        hello_world.release();
+        hello_world.releaseLast();
 
         final ExcerptTailer tailer = queue.createTailer();
 
@@ -219,7 +219,7 @@ public class ChronicleQueueIndexTest {
             // that file and never progressed to the latest queue file.
             assertTrue(results.contains("Hello World 3"));
         } finally {
-            forRead.release();
+            forRead.releaseLast();
         }
     }
 

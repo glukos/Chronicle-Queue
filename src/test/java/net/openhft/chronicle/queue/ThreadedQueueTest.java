@@ -18,7 +18,6 @@ package net.openhft.chronicle.queue;
 
 import net.openhft.chronicle.bytes.Bytes;
 import net.openhft.chronicle.bytes.BytesUtil;
-import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.threads.ThreadDump;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
@@ -34,7 +33,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static net.openhft.chronicle.queue.RollCycles.TEST_DAILY;
 import static org.junit.Assert.*;
-import static org.junit.Assume.assumeFalse;
 
 public class ThreadedQueueTest {
 
@@ -77,7 +75,7 @@ public class ThreadedQueueTest {
                         counter.incrementAndGet();
                 }
 
-                bytes.release();
+                bytes.releaseLast();
             } catch (Throwable t) {
                 t.printStackTrace();
             }
@@ -98,7 +96,7 @@ public class ThreadedQueueTest {
                     message.append(i);
                     appender.writeBytes(message);
                 }
-                message.release();
+                message.releaseLast();
             } catch (Throwable t) {
                 t.printStackTrace();
             }
@@ -140,7 +138,7 @@ public class ThreadedQueueTest {
         assertTrue(tailer.readBytes(bytes));
         assertEquals("Hello World", bytes.toString());
 
-        bytes.release();
+        bytes.releaseLast();
     }
 
     @After

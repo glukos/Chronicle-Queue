@@ -18,6 +18,7 @@
 package net.openhft.chronicle.queue.impl.table;
 
 import net.openhft.chronicle.bytes.MappedBytes;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.values.LongValue;
 import net.openhft.chronicle.queue.impl.TableStore;
 import net.openhft.chronicle.wire.WireOut;
@@ -50,78 +51,71 @@ public class ReadonlyTableStore<T extends Metadata> implements TableStore<T> {
 
     @Override
     public <R> R doWithExclusiveLock(Function<TableStore<T>, ? extends R> code) {
-        UnsupportedOperationException read_only = new UnsupportedOperationException("Read only");
-        read_only.printStackTrace();
-        throw read_only;
+        throw newReadOnly();
     }
 
     @Nullable
     @Override
     public File file() {
-        UnsupportedOperationException read_only = new UnsupportedOperationException("Read only");
-        read_only.printStackTrace();
-        throw read_only;
+        throw newReadOnly();
     }
 
     @NotNull
     @Override
     public MappedBytes bytes() {
-        UnsupportedOperationException read_only = new UnsupportedOperationException("Read only");
-        read_only.printStackTrace();
-        throw read_only;
+        throw newReadOnly();
     }
 
     @NotNull
     @Override
     public String dump() {
-        UnsupportedOperationException read_only = new UnsupportedOperationException("Read only");
-        read_only.printStackTrace();
-        throw read_only;
+        throw newReadOnly();
     }
 
     @NotNull
     @Override
     public String shortDump() {
-        UnsupportedOperationException read_only = new UnsupportedOperationException("Read only");
-        read_only.printStackTrace();
-        throw read_only;
+        throw newReadOnly();
     }
 
     @Override
-    public void reserve() throws IllegalStateException {
-        UnsupportedOperationException read_only = new UnsupportedOperationException("Read only");
-        read_only.printStackTrace();
-        throw read_only;
+    public void reserve(ReferenceOwner id) throws IllegalStateException {
+        throw newReadOnly();
     }
 
     @Override
-    public void release() throws IllegalStateException {
-        UnsupportedOperationException read_only = new UnsupportedOperationException("Read only");
-        read_only.printStackTrace();
-        throw read_only;
-    }
-
-    @Override
-    public long refCount() {
-        UnsupportedOperationException read_only = new UnsupportedOperationException("Read only");
-        read_only.printStackTrace();
-        throw read_only;
-    }
-
-    @Override
-    public boolean tryReserve() {
+    public boolean tryReserve(ReferenceOwner id) {
         return false;
     }
 
     @Override
+    public void release(ReferenceOwner id) throws IllegalStateException {
+        throw newReadOnly();
+    }
+
+    @Override
+    public void releaseLast(ReferenceOwner id) {
+        throw newReadOnly();
+    }
+
+    @Override
+    public int refCount() {
+        throw newReadOnly();
+    }
+
+    @Override
     public void writeMarshallable(@NotNull WireOut wire) {
-        UnsupportedOperationException read_only = new UnsupportedOperationException("Read only");
-        read_only.printStackTrace();
-        throw read_only;
+        throw newReadOnly();
     }
 
     @Override
     public boolean readOnly() {
         return true;
+    }
+
+    UnsupportedOperationException newReadOnly() {
+        UnsupportedOperationException read_only = new UnsupportedOperationException("Read only");
+        read_only.printStackTrace();
+        return read_only;
     }
 }

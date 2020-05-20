@@ -21,6 +21,7 @@ import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.bytes.MappedFile;
 import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.OS;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.annotation.PackageLocal;
 import net.openhft.chronicle.core.threads.EventLoop;
 import net.openhft.chronicle.core.threads.ThreadLocalHelper;
@@ -276,12 +277,13 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     @Override
     public String dumpLastHeader() {
         StringBuilder sb = new StringBuilder(256);
-        WireStore wireStore = storeForCycle(lastCycle(), epoch, false);
+        ReferenceOwner temp = ReferenceOwner.temporary();
+        WireStore wireStore = storeForCycle(temp, lastCycle(), epoch, false);
         if (wireStore != null) {
             try {
                 sb.append(wireStore.dumpHeader());
             } finally {
-                release(wireStore);
+                release(temp, wireStore);
             }
         }
         return sb.toString();
@@ -291,14 +293,15 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     @Override
     public String dump() {
         StringBuilder sb = new StringBuilder(1024);
+        ReferenceOwner temp = ReferenceOwner.temporary();
         for (int i = firstCycle(), max = lastCycle(); i <= max; i++) {
-            CommonStore commonStore = storeForCycle(i, epoch, false);
+            CommonStore commonStore = storeForCycle(temp, i, epoch, false);
             if (commonStore != null) {
                 try {
 //                    sb.append("# ").append(wireStore.bytes().mappedFile().file()).append("\n");
                     sb.append(commonStore.dump());
                 } finally {
-                    release(commonStore);
+                    release(temp, commonStore);
                 }
             }
         }
@@ -488,8 +491,8 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
 
     @Nullable
     @Override
-    public final WireStore storeForCycle(int cycle, final long epoch, boolean createIfAbsent) {
-        return this.pool.acquire(cycle, epoch, createIfAbsent);
+    public final WireStore storeForCycle(ReferenceOwner owner, int cycle, final long epoch, boolean createIfAbsent) {
+        return this.pool.acquire(owner, cycle, epoch, createIfAbsent);
     }
 
     @Override
@@ -632,9 +635,9 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     }
 
     @Override
-    public final void release(@Nullable CommonStore store) {
+    public final void release(ReferenceOwner owner, @Nullable CommonStore store) {
         if (store != null)
-            this.pool.release(store);
+            this.pool.release(owner, store);
     }
 
     @Override
@@ -796,7 +799,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
             int cycle = cycle();
             int lastCycle = lastCycle();
             while (lastCycle < cycle && lastCycle >= 0) {
-                final WireStore store = storeSupplier.acquire(lastCycle, false);
+                final WireStore store = storeSupplier.get(lastCycle);
                 if (store == null)
                     return;
                 try {
@@ -809,7 +812,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
                     }
                     break;
                 } finally {
-                    store.release();
+                    store.releaseLast();
                 }
             }
             directoryListing.refresh();
@@ -918,8 +921,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
 //                        System.err.println("wire.bytes.byteStore.refCount="+wire.bytes().bytesStore().refCount());
                     throw e;
                 }
-
-                return wireStore;
+                return wireStore.cycle(cycle);
 
             } catch (@NotNull TimeoutException | IOException e) {
                 throw Jvm.rethrow(e);

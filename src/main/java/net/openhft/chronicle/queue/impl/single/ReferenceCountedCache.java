@@ -1,6 +1,7 @@
 package net.openhft.chronicle.queue.impl.single;
 
 import net.openhft.chronicle.core.ReferenceCounted;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.util.ThrowingFunction;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -14,7 +15,7 @@ import java.util.function.Function;
  * <p>
  * Created by Jerry Shea on 27/04/18.
  */
-public class ReferenceCountedCache<K, T extends ReferenceCounted, V, E extends Throwable> {
+public class ReferenceCountedCache<K, T extends ReferenceCounted, V, E extends Throwable> implements ReferenceOwner {
     private final Map<K, T> cache = new ConcurrentHashMap<>();
     private final Function<T, V> transformer;
     private final ThrowingFunction<K, T, E> creator;
@@ -33,17 +34,12 @@ public class ReferenceCountedCache<K, T extends ReferenceCounted, V, E extends T
         @Nullable T value = cache.get(key);
 
         // another thread may have reduced refCount since removeIf above
-        if (value == null || !value.tryReserve()) {
+        if (value == null || !value.tryReserve(this)) {
             // worst case is that 2 threads create at 'same' time
             value = creator.apply(key);
             cache.put(key, value);
         }
 
-        try {
-            return transformer.apply(value);
-        } finally {
-            // release whether we created a new one or not
-            value.release();
-        }
+        return transformer.apply(value);
     }
 }

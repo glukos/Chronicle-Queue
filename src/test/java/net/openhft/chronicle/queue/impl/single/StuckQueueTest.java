@@ -1,6 +1,7 @@
 package net.openhft.chronicle.queue.impl.single;
 
 import net.openhft.chronicle.core.OS;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.queue.*;
 import net.openhft.chronicle.queue.impl.RollingChronicleQueue;
 import net.openhft.chronicle.queue.impl.WireStore;
@@ -38,27 +39,32 @@ public class StuckQueueTest {
                 ExcerptTailer tailer = q.createTailer();
 
                 int cycle = q.rollCycle().toCycle(0x18406e100000000L);
-                WireStore wireStore = q.storeForCycle(cycle, q.epoch(), false);
-                String absolutePath = wireStore.file().getAbsolutePath();
-                System.out.println(absolutePath);
-                Assert.assertTrue(absolutePath.endsWith("20180508-1249.cq4"));
-                //   Assert.assertTrue(tailer.moveToIndex(0x18406e100000000L));
+                ReferenceOwner temp = ReferenceOwner.temporary();
+                WireStore wireStore = q.storeForCycle(temp, cycle, q.epoch(), false);
+                try {
+                    String absolutePath = wireStore.file().getAbsolutePath();
+                    System.out.println(absolutePath);
+                    Assert.assertTrue(absolutePath.endsWith("20180508-1249.cq4"));
+                    //   Assert.assertTrue(tailer.moveToIndex(0x18406e100000000L));
 
-                try (DocumentContext dc = tailer.readingDocument()) {
+                    try (DocumentContext dc = tailer.readingDocument()) {
 //                Assert.assertTrue(!dc.isPresent());
-                    System.out.println(Long.toHexString(dc.index()));
-                }
+                        System.out.println(Long.toHexString(dc.index()));
+                    }
 
-                //  Assert.assertTrue(tailer.moveToIndex(0x183efe300000000L));
-                try (DocumentContext dc = ChronicleQueue.singleBuilder(tmpDir).rollCycle(RollCycles.MINUTELY).build().acquireAppender().writingDocument()) {
-                    dc.wire().write("hello").text("world");
-                }
-                tailer = q.createTailer();
-                try (DocumentContext dc = tailer.readingDocument()) {
-                    Assert.assertTrue(dc.isPresent());
-                    String actual = dc.wire().read("hello").text();
-                    Assert.assertEquals("world", actual);
-                    System.out.println(Long.toHexString(dc.index()));
+                    //  Assert.assertTrue(tailer.moveToIndex(0x183efe300000000L));
+                    try (DocumentContext dc = ChronicleQueue.singleBuilder(tmpDir).rollCycle(RollCycles.MINUTELY).build().acquireAppender().writingDocument()) {
+                        dc.wire().write("hello").text("world");
+                    }
+                    tailer = q.createTailer();
+                    try (DocumentContext dc = tailer.readingDocument()) {
+                        Assert.assertTrue(dc.isPresent());
+                        String actual = dc.wire().read("hello").text();
+                        Assert.assertEquals("world", actual);
+                        System.out.println(Long.toHexString(dc.index()));
+                    }
+                } finally {
+                    wireStore.release(temp);
                 }
             }
         } finally {

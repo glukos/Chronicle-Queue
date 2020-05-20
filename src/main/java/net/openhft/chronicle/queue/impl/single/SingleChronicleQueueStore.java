@@ -17,9 +17,7 @@ package net.openhft.chronicle.queue.impl.single;
 
 import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.bytes.MappedFile;
-import net.openhft.chronicle.core.Jvm;
-import net.openhft.chronicle.core.Maths;
-import net.openhft.chronicle.core.ReferenceCounter;
+import net.openhft.chronicle.core.*;
 import net.openhft.chronicle.core.annotation.UsedViaReflection;
 import net.openhft.chronicle.core.io.Closeable;
 import net.openhft.chronicle.core.pool.ClassAliasPool;
@@ -54,13 +52,14 @@ public class SingleChronicleQueueStore implements WireStore {
     @NotNull
     private final MappedFile mappedFile;
     @NotNull
-    private final ReferenceCounter refCount;
+    private final ReferenceCounted refCount;
     private final int dataVersion;
 
     @NotNull
     private final transient Sequence sequence;
 
     private volatile Thread lastAccessedThread;
+    private int cycle;
 
     /**
      * used by {@link net.openhft.chronicle.wire.Demarshallable}
@@ -183,7 +182,7 @@ public class SingleChronicleQueueStore implements WireStore {
                 w.usePadding(true);
             return Wires.fromSizePrefixedBlobs(w, abbrev);
         } finally {
-            bytes.release();
+            bytes.releaseLast();
         }
     }
 
@@ -197,7 +196,7 @@ public class SingleChronicleQueueStore implements WireStore {
             bytes.readLimit(Wires.lengthOf(size) + 4);
             return Wires.fromSizePrefixedBlobs(bytes);
         } finally {
-            bytes.release();
+            bytes.releaseLast();
         }
     }
 
@@ -239,30 +238,33 @@ public class SingleChronicleQueueStore implements WireStore {
     }
 
     @Override
-    public void reserve() throws IllegalStateException {
-        this.refCount.reserve();
+    public void reserve(ReferenceOwner id) throws IllegalStateException {
+        this.refCount.reserve(id);
     }
 
     @Override
-    public void release() throws IllegalStateException {
-        this.refCount.release();
+    public boolean tryReserve(ReferenceOwner id) {
+        return this.refCount.tryReserve(id);
     }
 
     @Override
-    public long refCount() {
+    public void release(ReferenceOwner id) throws IllegalStateException {
+        this.refCount.release(id);
+    }
+
+    @Override
+    public void releaseLast(ReferenceOwner id) {
+        this.refCount.releaseLast();
+    }
+
+    @Override
+    public int refCount() {
         return this.refCount.refCount();
     }
 
     @Override
-    public boolean tryReserve() {
-        return this.refCount.tryReserve();
-    }
-
-    @Override
     public void close() {
-        while (refCount.refCount() > 0) {
-            refCount.release();
-        }
+        refCount.releaseLast();
     }
 
     /**
@@ -304,7 +306,7 @@ public class SingleChronicleQueueStore implements WireStore {
     private void onCleanup() {
         Closeable.closeQuietly(writePosition);
         Closeable.closeQuietly(indexing);
-        mappedBytes.release();
+        mappedBytes.releaseLast();
     }
 
     @Override
@@ -352,14 +354,14 @@ public class SingleChronicleQueueStore implements WireStore {
     @Override
     public boolean writeEOF(@NotNull Wire wire, long timeoutMS) {
         String fileName = mappedFile.file().getAbsolutePath();
-
+        ReferenceOwner eof = ReferenceOwner.temporary();
         // just in case we are about to release this
-        if (wire.bytes().tryReserve()) {
+        if (wire.bytes().tryReserve(eof)) {
             try {
                 return writeEOFAndShrink(wire, timeoutMS);
 
             } finally {
-                wire.bytes().release();
+                wire.bytes().release(eof);
             }
         }
 
@@ -400,6 +402,17 @@ public class SingleChronicleQueueStore implements WireStore {
             lastAccessedThread = Thread.currentThread();
         }
         return lastAccessedThread == Thread.currentThread();
+    }
+
+    @Override
+    public int cycle() {
+        return cycle;
+    }
+
+    @Override
+    public SingleChronicleQueueStore cycle(int cycle) {
+        this.cycle = cycle;
+        return this;
     }
 }
 

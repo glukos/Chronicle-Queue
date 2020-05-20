@@ -21,6 +21,7 @@ import net.openhft.chronicle.bytes.Bytes;
 import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.OS;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.io.IOTools;
 import net.openhft.chronicle.core.time.SetTimeProvider;
 import net.openhft.chronicle.core.time.TimeProvider;
@@ -153,7 +154,8 @@ public class RollEOFTest {
         long chunkSize = OS.pageAlign(blockSize);
         long overlapSize = OS.pageAlign(blockSize / 4);
         final MappedBytes mappedBytes = MappedBytes.mappedBytes(path.toFile(), chunkSize, overlapSize, false);
-        mappedBytes.reserve();
+        ReferenceOwner eof = ReferenceOwner.temporary();
+        mappedBytes.reserve(eof);
         try {
             final Wire wire = WireType.BINARY_LIGHT.apply(mappedBytes);
             final Bytes<?> bytes = wire.bytes();
@@ -169,7 +171,7 @@ public class RollEOFTest {
                 bytes.writeInt(0);
             }
         } finally {
-            mappedBytes.release();
+            mappedBytes.release(eof);
         }
     }
 

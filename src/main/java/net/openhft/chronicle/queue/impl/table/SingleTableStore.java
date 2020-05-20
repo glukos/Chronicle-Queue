@@ -17,10 +17,7 @@ package net.openhft.chronicle.queue.impl.table;
 
 import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.bytes.MappedFile;
-import net.openhft.chronicle.core.Jvm;
-import net.openhft.chronicle.core.Maths;
-import net.openhft.chronicle.core.ReferenceCounter;
-import net.openhft.chronicle.core.StackTrace;
+import net.openhft.chronicle.core.*;
 import net.openhft.chronicle.core.annotation.UsedViaReflection;
 import net.openhft.chronicle.core.io.IORuntimeException;
 import net.openhft.chronicle.core.util.StringUtils;
@@ -62,7 +59,7 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
     @NotNull
     private final Wire mappedWire;
     @NotNull
-    private final ReferenceCounter refCount;
+    private final ReferenceCounted refCount;
     private AtomicBoolean isClosed = new AtomicBoolean();
 
     /**
@@ -175,7 +172,7 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
             bytes.readLimit(bytes.realCapacity());
             return Wires.fromSizePrefixedBlobs(bytes, abbrev);
         } finally {
-            bytes.release();
+            bytes.releaseLast();
         }
     }
 
@@ -186,32 +183,35 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
     }
 
     @Override
-    public void reserve() throws IllegalStateException {
-        this.refCount.reserve();
+    public void reserve(ReferenceOwner id) throws IllegalStateException {
+        this.refCount.reserve(id);
     }
 
     @Override
-    public void release() throws IllegalStateException {
-        this.refCount.release();
+    public void release(ReferenceOwner id) throws IllegalStateException {
+        this.refCount.release(id);
     }
 
     @Override
-    public long refCount() {
+    public boolean tryReserve(ReferenceOwner id) {
+        return refCount.tryReserve(id);
+    }
+
+    @Override
+    public int refCount() {
         return this.refCount.refCount();
     }
 
     @Override
-    public boolean tryReserve() {
-        return refCount.tryReserve();
+    public void releaseLast(ReferenceOwner id) {
+        this.refCount.releaseLast();
     }
 
     @Override
     public void close() {
-        if (!isClosed.getAndSet(true)) {
-            while (refCount.refCount() > 0) {
-                refCount.release();
-            }
-        }
+        if (isClosed.getAndSet(true))
+            return;
+        refCount.releaseLast();
     }
 
     /**
@@ -239,7 +239,7 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
     // *************************************************************************
 
     private void onCleanup() {
-        mappedBytes.release();
+        mappedBytes.releaseLast();
     }
 
     @Override
@@ -260,7 +260,8 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
     @Override
     public synchronized LongValue acquireValueFor(CharSequence key, long defaultValue) { // TODO Change to ThreadLocal values if performance is a problem.
         StringBuilder sb = Wires.acquireStringBuilder();
-        mappedBytes.reserve();
+        ReferenceOwner acquire = ReferenceOwner.temporary();
+        mappedBytes.reserve(acquire);
         try {
             mappedBytes.readPosition(0);
             mappedBytes.readLimit(mappedBytes.realCapacity());
@@ -291,7 +292,7 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
             throw new IORuntimeException(e);
 
         } finally {
-            mappedBytes.release();
+            mappedBytes.release(acquire);
         }
     }
 

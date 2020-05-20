@@ -1,6 +1,7 @@
 package net.openhft.chronicle.queue;
 
 import net.openhft.chronicle.bytes.Bytes;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.queue.impl.WireStore;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
@@ -56,7 +57,7 @@ public class MoveToWrongIndexThenToEndTest {
 
     @After
     public void after() {
-        outbound.release();
+        outbound.releaseLast();
         DirectoryUtils.deleteDir(basePath.toFile());
     }
 
@@ -160,26 +161,30 @@ public class MoveToWrongIndexThenToEndTest {
     private long approximateLastIndex(int cycle, SingleChronicleQueue queue,
                                       SingleChronicleQueueExcerpts.StoreTailer tailer) {
         try {
-            WireStore wireStore = queue.storeForCycle(cycle, queue.epoch(), false);
+            ReferenceOwner temp = ReferenceOwner.temporary();
+            WireStore wireStore = queue.storeForCycle(temp, cycle, queue.epoch(), false);
             if (wireStore == null) {
                 return noIndex;
             }
+            try {
+                long baseIndex = rollCycle.toIndex(cycle, 0);
 
-            long baseIndex = rollCycle.toIndex(cycle, 0);
+                tailer.moveToIndex(baseIndex);
 
-            tailer.moveToIndex(baseIndex);
+                long seq = wireStore.sequenceForPosition(tailer, Long.MAX_VALUE, false);
+                long sequenceNumber = seq + 1;
+                long index = rollCycle.toIndex(cycle, sequenceNumber);
 
-            long seq = wireStore.sequenceForPosition(tailer, Long.MAX_VALUE, false);
-            long sequenceNumber = seq + 1;
-            long index = rollCycle.toIndex(cycle, sequenceNumber);
+                int cycleOfIndex = rollCycle.toCycle(index);
+                if (cycleOfIndex != cycle) {
+                    throw new IllegalStateException(
+                            "Expected cycle " + cycle + " but got " + cycleOfIndex);
+                }
 
-            int cycleOfIndex = rollCycle.toCycle(index);
-            if (cycleOfIndex != cycle) {
-                throw new IllegalStateException(
-                        "Expected cycle " + cycle + " but got " + cycleOfIndex);
+                return index;
+            } finally {
+                wireStore.release(temp);
             }
-
-            return index;
         } catch (StreamCorruptedException | UnrecoverableTimeoutException e) {
             throw new IllegalStateException(e);
         }

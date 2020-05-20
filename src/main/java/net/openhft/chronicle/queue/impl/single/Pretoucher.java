@@ -3,6 +3,7 @@ package net.openhft.chronicle.queue.impl.single;
 import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.bytes.NewChunkListener;
 import net.openhft.chronicle.core.Jvm;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.threads.InvalidEventHandlerException;
 import net.openhft.chronicle.core.time.TimeProvider;
 import net.openhft.chronicle.queue.impl.WireStore;
@@ -21,7 +22,7 @@ import java.util.function.IntConsumer;
  * Alternatively, the {@code shutdown()} method can be called to close the supplied queue and release any other resources.
  * Invocation of the {@code execute()} method after {@code shutdown()} has been called with cause an {@code IllegalStateException} to be thrown.
  */
-public final class Pretoucher implements Closeable {
+public final class Pretoucher implements Closeable, ReferenceOwner {
     static final long PRETOUCHER_PREROLL_TIME_DEFAULT_MS = 2_000L;
     private static final long PRETOUCHER_PREROLL_TIME_MS = Long.getLong("SingleChronicleQueueExcerpts.pretoucherPrerollTimeMs", PRETOUCHER_PREROLL_TIME_DEFAULT_MS);
     private static final boolean EARLY_ACQUIRE_NEXT_CYCLE = Boolean.getBoolean("SingleChronicleQueueExcerpts.earlyAcquireNextCycle");
@@ -86,7 +87,7 @@ public final class Pretoucher implements Closeable {
                     } catch (Exception ex) {
                         Jvm.warn().on(getClass(), "unable to write the EOF file=" + currentCycleMappedBytes.mappedFile().file(), ex);
                     }
-                currentCycleWireStore = queue.storeForCycle(qCycle, queue.epoch(), CAN_WRITE);
+                currentCycleWireStore = queue.storeForCycle(this, qCycle, queue.epoch(), CAN_WRITE);
             } finally {
                 if (CAN_WRITE)
                     queue.writeLock().unlock();
@@ -113,7 +114,7 @@ public final class Pretoucher implements Closeable {
 
     private void releaseResources() {
         if (currentCycleWireStore != null) {
-            queue.release(currentCycleWireStore);
+            queue.release(this, currentCycleWireStore);
             currentCycleWireStore = null;
         }
         if (currentCycleMappedBytes != null) {

@@ -22,6 +22,10 @@ import java.text.ParseException;
 import java.util.NavigableSet;
 
 public interface WireStoreSupplier {
+    default WireStore get(int cycle) {
+        return acquire(cycle, false);
+    }
+
     @Nullable
     WireStore acquire(int cycle, boolean createIfAbsent);
 

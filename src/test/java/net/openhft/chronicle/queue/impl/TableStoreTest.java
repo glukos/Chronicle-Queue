@@ -1,6 +1,8 @@
 package net.openhft.chronicle.queue.impl;
 
+import net.openhft.chronicle.bytes.ref.BinaryLongReference;
 import net.openhft.chronicle.core.OS;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.values.LongValue;
 import net.openhft.chronicle.queue.impl.table.Metadata;
 import net.openhft.chronicle.queue.impl.table.SingleTableBuilder;
@@ -36,6 +38,8 @@ public class TableStoreTest {
                     "b: 2\n" +
                     "...\n" +
                     "# 65436 bytes remaining\n", table.dump());
+            ((BinaryLongReference) a).bytesStore().release((ReferenceOwner) a);
+            ((BinaryLongReference) b).bytesStore().release((ReferenceOwner) b);
         }
 
         try (TableStore table = SingleTableBuilder.binary(file, Metadata.NoMeta.INSTANCE).build()) {
@@ -62,6 +66,8 @@ public class TableStoreTest {
                     "...\n" +
                     "# 65420 bytes remaining\n", table.dump());
             System.out.println(table.dump());
+            ((BinaryLongReference) c).bytesStore().release((ReferenceOwner) c);
+            ((BinaryLongReference) b).bytesStore().release((ReferenceOwner) b);
         }
     }
 }

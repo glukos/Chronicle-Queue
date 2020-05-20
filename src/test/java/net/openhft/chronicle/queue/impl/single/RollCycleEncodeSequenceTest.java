@@ -40,7 +40,7 @@ public class RollCycleEncodeSequenceTest {
 
     @After
     public void before() {
-        bytes.release();
+        bytes.releaseLast();
     }
 
     @Test

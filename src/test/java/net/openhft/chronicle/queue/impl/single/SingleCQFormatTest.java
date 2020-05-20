@@ -134,7 +134,7 @@ public class SingleCQFormatTest {
         file.createNewFile();
         @NotNull MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE);
         bytes.writeInt(Wires.NOT_COMPLETE | Wires.META_DATA);
-        bytes.release();
+        bytes.releaseLast();
         @Nullable ChronicleQueue queue = null;
         try {
             queue = binary(dir).timeoutMS(500L)
@@ -191,7 +191,7 @@ public class SingleCQFormatTest {
                 "  },\n" +
                 "  lastAcknowledgedIndexReplicated: 0\n" +
                 "}\n", Wires.fromSizePrefixedBlobs(bytes.readPosition(0)));
-        bytes.release();
+        bytes.releaseLast();
 
         @NotNull ChronicleQueue queue = binary(dir)
                 .rollCycle(RollCycles.TEST4_DAILY)
@@ -233,7 +233,7 @@ public class SingleCQFormatTest {
                 "  },\n" +
                 "  dataFormat: 1\n" +
                 "}\n", Wires.fromSizePrefixedBlobs(bytes.readPosition(0)));
-        bytes.release();
+        bytes.releaseLast();
 
         @NotNull RollingChronicleQueue queue = binary(dir)
                 .testBlockSize()
@@ -262,7 +262,7 @@ public class SingleCQFormatTest {
                     w -> w.write(() -> "wireType").object(WireType.BINARY));
         }
 
-        bytes.release();
+        bytes.releaseLast();
         try (@NotNull ChronicleQueue queue = binary(dir)
                 .rollCycle(RollCycles.TEST4_DAILY)
                 .blockSize(ChronicleQueue.TEST_BLOCK_SIZE)

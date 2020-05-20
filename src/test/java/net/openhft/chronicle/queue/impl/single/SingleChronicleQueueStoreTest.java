@@ -1,5 +1,6 @@
 package net.openhft.chronicle.queue.impl.single;
 
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.util.ThrowingConsumer;
 import net.openhft.chronicle.queue.ChronicleQueue;
 import net.openhft.chronicle.queue.ExcerptAppender;
@@ -27,19 +28,24 @@ public class SingleChronicleQueueStoreTest {
 
     private static void assertExcerptsAreIndexed(final RollingChronicleQueue queue, final long[] indices,
                                                  final Function<Integer, Boolean> shouldBeIndexed, final ScanResult expectedScanResult) {
+        ReferenceOwner temp = ReferenceOwner.temporary();
         final SingleChronicleQueueStore wireStore = (SingleChronicleQueueStore)
-                queue.storeForCycle(queue.cycle(), 0L, true);
-        final SCQIndexing indexing = wireStore.indexing;
-        for (int i = 0; i < RECORD_COUNT; i++) {
-            final int startLinearScanCount = indexing.linearScanCount;
-            final ScanResult scanResult = indexing.moveToIndex((SingleChronicleQueueExcerpts.StoreTailer) queue.createTailer(), indices[i]);
-            assertThat(scanResult, is(expectedScanResult));
+                queue.storeForCycle(temp, queue.cycle(), 0L, true);
+        try {
+            final SCQIndexing indexing = wireStore.indexing;
+            for (int i = 0; i < RECORD_COUNT; i++) {
+                final int startLinearScanCount = indexing.linearScanCount;
+                final ScanResult scanResult = indexing.moveToIndex((SingleChronicleQueueExcerpts.StoreTailer) queue.createTailer(), indices[i]);
+                assertThat(scanResult, is(expectedScanResult));
 
-            if (shouldBeIndexed.apply(i)) {
-                assertThat(indexing.linearScanCount, is(startLinearScanCount));
-            } else {
-                assertThat(indexing.linearScanCount, is(startLinearScanCount + 1));
+                if (shouldBeIndexed.apply(i)) {
+                    assertThat(indexing.linearScanCount, is(startLinearScanCount));
+                } else {
+                    assertThat(indexing.linearScanCount, is(startLinearScanCount + 1));
+                }
             }
+        } finally {
+            wireStore.release(temp);
         }
     }
 

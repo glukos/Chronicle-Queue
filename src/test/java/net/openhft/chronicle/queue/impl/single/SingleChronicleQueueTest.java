@@ -292,7 +292,7 @@ public class SingleChronicleQueueTest extends ChronicleQueueTestBase {
                     assertEquals(expected, actual);
                     f.get(1, TimeUnit.SECONDS);
                 } finally {
-                    bytes.release();
+                    bytes.releaseLast();
                 }
             } finally {
                 service1.shutdownNow();
@@ -603,7 +603,7 @@ public class SingleChronicleQueueTest extends ChronicleQueueTestBase {
 
                 assertEquals(expected.readInt(0), b.readInt(0));
 
-                b.release();
+                b.releaseLast();
             }
         }
     }
@@ -1094,9 +1094,9 @@ public class SingleChronicleQueueTest extends ChronicleQueueTestBase {
                 tailer.readBytes(bytes);
                 assertEquals("Jobs", bytes.toString());
             } finally {
-                steve.release();
-                jobs.release();
-                bytes.release();
+                steve.releaseLast();
+                jobs.releaseLast();
+                bytes.releaseLast();
             }
         }
     }
@@ -3441,7 +3441,7 @@ public class SingleChronicleQueueTest extends ChronicleQueueTestBase {
 
         @Override
         public void close() {
-            bytes.release();
+            bytes.releaseLast();
         }
     }
 }

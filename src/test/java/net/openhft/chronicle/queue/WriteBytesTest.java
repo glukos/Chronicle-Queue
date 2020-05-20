@@ -1131,7 +1131,7 @@ public class WriteBytesTest {
 
     @After
     public void checkRegisteredBytes() {
-        outgoingBytes.release();
+        outgoingBytes.releaseLast();
         BytesUtil.checkRegisteredBytes();
     }
 }

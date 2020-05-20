@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @RequiredForClient
 public class AcquireReleaseTest extends ChronicleQueueTestBase {
     @Test
-    public void testAccquireAndRelease() throws Exception {
+    public void testAcquireAndRelease() {
         File dir = DirectoryUtils.tempDir("AcquireReleaseTest");
         try {
             AtomicInteger acount = new AtomicInteger();
@@ -44,11 +44,12 @@ public class AcquireReleaseTest extends ChronicleQueueTestBase {
                     .timeProvider(tp)
                     .build();
             for (int i = 0; i < 10; i++) {
-                queue.acquireAppender().writeDocument(w -> {
-                    w.write("a").marshallable(m -> {
-                        m.write("b").text("c");
-                    });
-                });
+                ExcerptAppender appender = queue.acquireAppender();
+                appender
+                        .writeDocument(w -> w.write("a")
+                                .marshallable(m ->
+                                        m.write("b").text("c")
+                                ));
             }
             Assert.assertEquals(10, acount.get());
             Assert.assertEquals(9, qcount.get());

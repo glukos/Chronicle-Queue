@@ -1,5 +1,7 @@
 package net.openhft.chronicle.queue.impl.single;
 
+import net.openhft.chronicle.bytes.Bytes;
+import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.io.Closeable;
 import net.openhft.chronicle.queue.ExcerptAppender;
 import net.openhft.chronicle.threads.Threads;
@@ -60,7 +62,8 @@ public enum StoreComponentReferenceHandler implements Closeable {
     }
 
     static void queueForRelease(final Wire wire) {
-        WIRES_TO_RELEASE.add(wire);
+        // TODO CHECK that the bytes are only held by INIT.
+//        WIRES_TO_RELEASE.add(wire);
     }
 
     private static boolean processWireQueue() {
@@ -69,8 +72,12 @@ public enum StoreComponentReferenceHandler implements Closeable {
         while ((wireToRelease = WIRES_TO_RELEASE.poll()) != null) {
             try {
                 released = true;
-                wireToRelease.bytes().release();
+                // TODO investigate what is happening here.
+                Bytes<?> bytes = wireToRelease.bytes();
+                if (bytes.refCount() > 0)
+                    bytes.releaseLast();
             } catch (IllegalStateException e) {
+                Jvm.debug().on(StoreComponentReferenceHandler.class, "already released?", e);
                 // ignore this - resource may have already been released by explicit close() operation
             } catch (Throwable t) {
                 LOGGER.warn("Failed to release wire bytes", t);

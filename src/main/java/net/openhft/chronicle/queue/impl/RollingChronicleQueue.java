@@ -15,12 +15,13 @@
  */
 package net.openhft.chronicle.queue.impl;
 
-import org.jetbrains.annotations.Nullable;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.queue.ChronicleQueue;
 import net.openhft.chronicle.queue.RollCycle;
 import net.openhft.chronicle.queue.TailerDirection;
 import net.openhft.chronicle.queue.impl.single.QueueLock;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.text.ParseException;
 
@@ -37,7 +38,7 @@ public interface RollingChronicleQueue extends ChronicleQueue, StoreReleasable {
      * is false and absent
      */
     @Nullable
-    WireStore storeForCycle(int cycle, final long epoch, boolean createIfAbsent);
+    WireStore storeForCycle(ReferenceOwner owner, int cycle, final long epoch, boolean createIfAbsent);
 
     /**
      * @return the first cycle number found, or Integer.MAX_VALUE is none found.

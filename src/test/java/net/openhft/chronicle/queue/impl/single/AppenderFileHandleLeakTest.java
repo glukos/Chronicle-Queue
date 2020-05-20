@@ -84,7 +84,7 @@ public final class AppenderFileHandleLeakTest {
                 }
             }
         } finally {
-            bytes.release();
+            bytes.releaseLast();
         }
     }
 

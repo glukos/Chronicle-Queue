@@ -13,14 +13,16 @@ public class CloserJobRefCountOnCloseTest {
     @Test
     public void test() {
         try (SingleChronicleQueue temp = SingleChronicleQueueBuilder.binary(DirectoryUtils.tempDir("temp")).build()) {
-            temp.acquireAppender().writeText("hello");
+            temp.acquireAppender()
+                    .writeText("hello");
+
             ExcerptTailer tailer = temp.createTailer();
             String s = tailer.readText();
             if (tailer instanceof SingleChronicleQueueExcerpts.StoreTailer) {
-                final SingleChronicleQueueExcerpts.StoreTailer storeTailer = (SingleChronicleQueueExcerpts.StoreTailer)tailer;
+                final SingleChronicleQueueExcerpts.StoreTailer storeTailer = (SingleChronicleQueueExcerpts.StoreTailer) tailer;
                 storeTailer.releaseResources();
             }
-            //tailer.getCloserJob().run();
+            tailer.getCloserJob().run();
         }
     }
 }

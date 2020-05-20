@@ -70,4 +70,9 @@ public interface WireStore extends CommonStore {
     String dumpHeader();
 
     int dataVersion();
+
+    WireStore cycle(int cycle);
+
+    int cycle();
+
 }
