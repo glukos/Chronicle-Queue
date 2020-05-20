@@ -354,7 +354,7 @@ public class SingleChronicleQueueStore implements WireStore {
     @Override
     public boolean writeEOF(@NotNull Wire wire, long timeoutMS) {
         String fileName = mappedFile.file().getAbsolutePath();
-        ReferenceOwner eof = ReferenceOwner.temporary();
+        ReferenceOwner eof = ReferenceOwner.temporary("writeEOF");
         // just in case we are about to release this
         if (wire.bytes().tryReserve(eof)) {
             try {

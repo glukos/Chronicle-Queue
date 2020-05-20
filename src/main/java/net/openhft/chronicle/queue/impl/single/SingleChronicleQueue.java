@@ -277,7 +277,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     @Override
     public String dumpLastHeader() {
         StringBuilder sb = new StringBuilder(256);
-        ReferenceOwner temp = ReferenceOwner.temporary();
+        ReferenceOwner temp = ReferenceOwner.temporary("dumpLastHeader");
         WireStore wireStore = storeForCycle(temp, lastCycle(), epoch, false);
         if (wireStore != null) {
             try {
@@ -293,7 +293,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     @Override
     public String dump() {
         StringBuilder sb = new StringBuilder(1024);
-        ReferenceOwner temp = ReferenceOwner.temporary();
+        ReferenceOwner temp = ReferenceOwner.temporary("dump");
         for (int i = firstCycle(), max = lastCycle(); i <= max; i++) {
             CommonStore commonStore = storeForCycle(temp, i, epoch, false);
             if (commonStore != null) {

@@ -260,7 +260,7 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
     @Override
     public synchronized LongValue acquireValueFor(CharSequence key, long defaultValue) { // TODO Change to ThreadLocal values if performance is a problem.
         StringBuilder sb = Wires.acquireStringBuilder();
-        ReferenceOwner acquire = ReferenceOwner.temporary();
+        ReferenceOwner acquire = ReferenceOwner.temporary("acquireValueFor");
         mappedBytes.reserve(acquire);
         try {
             mappedBytes.readPosition(0);
