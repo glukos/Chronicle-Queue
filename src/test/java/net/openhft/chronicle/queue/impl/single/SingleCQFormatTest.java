@@ -68,7 +68,8 @@ public class SingleCQFormatTest {
         @NotNull File dir = new File(OS.TARGET + "/deleteme-" + System.nanoTime());
         dir.mkdir();
 
-        try (@NotNull MappedBytes bytes = MappedBytes.mappedBytes(new File(dir, "19700102" + SingleChronicleQueue.SUFFIX), 64 << 10)) {
+        File file = new File(dir, "19700102" + SingleChronicleQueue.SUFFIX);
+        try (@NotNull MappedBytes bytes = MappedBytes.mappedBytes(file, 64 << 10)) {
             bytes.write8bit("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>");
 
             try (@NotNull RollingChronicleQueue queue = binary(dir)
@@ -132,9 +133,9 @@ public class SingleCQFormatTest {
         dir.mkdirs();
         File file = new File(dir, "19700101" + SingleChronicleQueue.SUFFIX);
         file.createNewFile();
-        @NotNull MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE);
-        bytes.writeInt(Wires.NOT_COMPLETE | Wires.META_DATA);
-        bytes.releaseLast();
+        try (MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE)) {
+            bytes.writeInt(Wires.NOT_COMPLETE | Wires.META_DATA);
+        }
         @Nullable ChronicleQueue queue = null;
         try {
             queue = binary(dir).timeoutMS(500L)
@@ -161,37 +162,38 @@ public class SingleCQFormatTest {
         @NotNull File dir = DirectoryUtils.tempDir("testCompleteHeader");
         dir.mkdirs();
 
-        @NotNull MappedBytes bytes = MappedBytes.mappedBytes(new File(dir, "19700101" + SingleChronicleQueue.SUFFIX),
-                ChronicleQueue.TEST_BLOCK_SIZE * 2);
-        @NotNull Wire wire = new BinaryWire(bytes);
-        try (DocumentContext dc = wire.writingDocument(true)) {
-            dc.wire().writeEventName(() -> "header").typePrefix(SingleChronicleQueueStore.class).marshallable(w -> {
-                w.write(() -> "wireType").object(WireType.BINARY);
-                w.write(() -> "writePosition").int64forBinding(0);
-                w.write(() -> "roll").typedMarshallable(new SCQRoll(RollCycles.TEST4_DAILY, 0, null, null));
-                w.write(() -> "indexing").typedMarshallable(new SCQIndexing(WireType.BINARY, 32, 4));
-                w.write(() -> "lastAcknowledgedIndexReplicated").int64forBinding(0);
-            });
-        }
+        File file = new File(dir, "19700101" + SingleChronicleQueue.SUFFIX);
+        try (MappedBytes bytes = MappedBytes.mappedBytes(file,
+                ChronicleQueue.TEST_BLOCK_SIZE * 2)) {
+            @NotNull Wire wire = new BinaryWire(bytes);
+            try (DocumentContext dc = wire.writingDocument(true)) {
+                dc.wire().writeEventName(() -> "header").typePrefix(SingleChronicleQueueStore.class).marshallable(w -> {
+                    w.write(() -> "wireType").object(WireType.BINARY);
+                    w.write(() -> "writePosition").int64forBinding(0);
+                    w.write(() -> "roll").typedMarshallable(new SCQRoll(RollCycles.TEST4_DAILY, 0, null, null));
+                    w.write(() -> "indexing").typedMarshallable(new SCQIndexing(WireType.BINARY, 32, 4));
+                    w.write(() -> "lastAcknowledgedIndexReplicated").int64forBinding(0);
+                });
+            }
 
-        assertEquals("--- !!meta-data #binary\n" +
-                "header: !SCQStore {\n" +
-                "  wireType: !WireType BINARY,\n" +
-                "  writePosition: 0,\n" +
-                "  roll: !SCQSRoll {\n" +
-                "    length: !int 86400000,\n" +
-                "    format: yyyyMMdd'T4',\n" +
-                "    epoch: 0\n" +
-                "  },\n" +
-                "  indexing: !SCQSIndexing {\n" +
-                "    indexCount: 32,\n" +
-                "    indexSpacing: 4,\n" +
-                "    index2Index: 0,\n" +
-                "    lastIndex: 0\n" +
-                "  },\n" +
-                "  lastAcknowledgedIndexReplicated: 0\n" +
-                "}\n", Wires.fromSizePrefixedBlobs(bytes.readPosition(0)));
-        bytes.releaseLast();
+            assertEquals("--- !!meta-data #binary\n" +
+                    "header: !SCQStore {\n" +
+                    "  wireType: !WireType BINARY,\n" +
+                    "  writePosition: 0,\n" +
+                    "  roll: !SCQSRoll {\n" +
+                    "    length: !int 86400000,\n" +
+                    "    format: yyyyMMdd'T4',\n" +
+                    "    epoch: 0\n" +
+                    "  },\n" +
+                    "  indexing: !SCQSIndexing {\n" +
+                    "    indexCount: 32,\n" +
+                    "    indexSpacing: 4,\n" +
+                    "    index2Index: 0,\n" +
+                    "    lastIndex: 0\n" +
+                    "  },\n" +
+                    "  lastAcknowledgedIndexReplicated: 0\n" +
+                    "}\n", Wires.fromSizePrefixedBlobs(bytes.readPosition(0)));
+        }
 
         @NotNull ChronicleQueue queue = binary(dir)
                 .rollCycle(RollCycles.TEST4_DAILY)
@@ -212,28 +214,29 @@ public class SingleCQFormatTest {
         @NotNull File dir = new File(OS.TARGET, getClass().getSimpleName() + "-" + System.nanoTime());
         dir.mkdir();
 
-        @NotNull MappedBytes bytes = MappedBytes.mappedBytes(new File(dir, "19700101-02" + SingleChronicleQueue.SUFFIX), ChronicleQueue.TEST_BLOCK_SIZE * 2);
-        @NotNull Wire wire = new BinaryWire(bytes);
-        try (DocumentContext dc = wire.writingDocument(true)) {
-            dc.wire().writeEventName(() -> "header").typedMarshallable(
-                    new SingleChronicleQueueStore(RollCycles.HOURLY, WireType.BINARY, bytes, 4 << 10, 4));
-        }
+        File file = new File(dir, "19700101-02" + SingleChronicleQueue.SUFFIX);
+        try (MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE * 2)) {
+            @NotNull Wire wire = new BinaryWire(bytes);
+            try (DocumentContext dc = wire.writingDocument(true)) {
+                dc.wire().writeEventName(() -> "header").typedMarshallable(
+                        new SingleChronicleQueueStore(RollCycles.HOURLY, WireType.BINARY, bytes, 4 << 10, 4));
+            }
 
-        assertEquals("--- !!meta-data #binary\n" +
-                "header: !SCQStore {\n" +
-                "  writePosition: [\n" +
-                "    0,\n" +
-                "    0\n" +
-                "  ],\n" +
-                "  indexing: !SCQSIndexing {\n" +
-                "    indexCount: !short 4096,\n" +
-                "    indexSpacing: 4,\n" +
-                "    index2Index: 0,\n" +
-                "    lastIndex: 0\n" +
-                "  },\n" +
-                "  dataFormat: 1\n" +
-                "}\n", Wires.fromSizePrefixedBlobs(bytes.readPosition(0)));
-        bytes.releaseLast();
+            assertEquals("--- !!meta-data #binary\n" +
+                    "header: !SCQStore {\n" +
+                    "  writePosition: [\n" +
+                    "    0,\n" +
+                    "    0\n" +
+                    "  ],\n" +
+                    "  indexing: !SCQSIndexing {\n" +
+                    "    indexCount: !short 4096,\n" +
+                    "    indexSpacing: 4,\n" +
+                    "    index2Index: 0,\n" +
+                    "    lastIndex: 0\n" +
+                    "  },\n" +
+                    "  dataFormat: 1\n" +
+                    "}\n", Wires.fromSizePrefixedBlobs(bytes.readPosition(0)));
+        }
 
         @NotNull RollingChronicleQueue queue = binary(dir)
                 .testBlockSize()
@@ -254,15 +257,16 @@ public class SingleCQFormatTest {
         @NotNull File dir = new File(OS.TARGET, getClass().getSimpleName() + "-" + System.nanoTime());
         dir.mkdir();
 
-        @NotNull MappedBytes bytes = MappedBytes.mappedBytes(new File(dir, "19700101" + SingleChronicleQueue.SUFFIX), ChronicleQueue.TEST_BLOCK_SIZE);
-        @NotNull Wire wire = new BinaryWire(bytes);
-        try (DocumentContext dc = wire.writingDocument(true)) {
-            dc.wire().writeEventName(() -> "header")
-                    .typePrefix(SingleChronicleQueueStore.class).marshallable(
-                    w -> w.write(() -> "wireType").object(WireType.BINARY));
-        }
+        File file = new File(dir, "19700101" + SingleChronicleQueue.SUFFIX);
+        try (MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE)) {
+            @NotNull Wire wire = new BinaryWire(bytes);
+            try (DocumentContext dc = wire.writingDocument(true)) {
+                dc.wire().writeEventName(() -> "header")
+                        .typePrefix(SingleChronicleQueueStore.class).marshallable(
+                        w -> w.write(() -> "wireType").object(WireType.BINARY));
+            }
 
-        bytes.releaseLast();
+        }
         try (@NotNull ChronicleQueue queue = binary(dir)
                 .rollCycle(RollCycles.TEST4_DAILY)
                 .blockSize(ChronicleQueue.TEST_BLOCK_SIZE)

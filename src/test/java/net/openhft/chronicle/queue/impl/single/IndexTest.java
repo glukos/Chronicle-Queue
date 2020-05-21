@@ -31,7 +31,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 
@@ -57,7 +56,7 @@ public class IndexTest extends ChronicleQueueTestBase {
     @Parameterized.Parameters
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
-//                {WireType.TEXT}, // TODO Add CAS to LongArrayReference.
+//                {WireType.BINARY_LIGHT},
                 {WireType.BINARY}
         });
     }
@@ -80,7 +79,7 @@ public class IndexTest extends ChronicleQueueTestBase {
     }
 
     @Test
-    public void test() throws IOException {
+    public void test() {
 
         try (final RollingChronicleQueue queue = SingleChronicleQueueBuilder
                 .binary(getTmpDir())
@@ -102,7 +101,7 @@ public class IndexTest extends ChronicleQueueTestBase {
     }
 
     @Test
-    public void shouldShortCircuitIndexLookupWhenNewIndexIsCloseToPreviousIndex() throws Exception {
+    public void shouldShortCircuitIndexLookupWhenNewIndexIsCloseToPreviousIndex() {
         try (final ChronicleQueue queue = SingleChronicleQueueBuilder
                 .binary(getTmpDir())
                 .testBlockSize()

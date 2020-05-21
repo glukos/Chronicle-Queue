@@ -94,7 +94,7 @@ public final class Pretoucher implements Closeable, ReferenceOwner {
             }
 
             if (currentCycleWireStore != null) {
-                currentCycleMappedBytes = currentCycleWireStore.bytes();
+                currentCycleMappedBytes = currentCycleWireStore.bytes(this);
                 currentCycle = qCycle;
                 if (chunkListener != null)
                     currentCycleMappedBytes.setNewChunkListener(chunkListener);

@@ -2,6 +2,7 @@ package net.openhft.chronicle.queue.impl;
 
 import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.core.ReferenceCounted;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.io.Closeable;
 import net.openhft.chronicle.wire.Demarshallable;
 import net.openhft.chronicle.wire.WriteMarshallable;
@@ -18,7 +19,7 @@ public interface CommonStore extends ReferenceCounted, Demarshallable, WriteMars
     File file();
 
     @NotNull
-    MappedBytes bytes();
+    MappedBytes bytes(ReferenceOwner owner);
 
     @NotNull
     String dump();

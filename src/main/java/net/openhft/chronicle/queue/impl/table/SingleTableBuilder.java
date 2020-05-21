@@ -33,6 +33,7 @@ import java.io.StreamCorruptedException;
 import java.nio.file.Path;
 import java.util.Objects;
 
+import static net.openhft.chronicle.core.ReferenceOwner.INIT;
 import static net.openhft.chronicle.core.pool.ClassAliasPool.CLASS_ALIASES;
 
 public class SingleTableBuilder<T extends Metadata> {
@@ -94,34 +95,40 @@ public class SingleTableBuilder<T extends Metadata> {
         try {
             if (!readOnly && file.createNewFile() && !file.canWrite())
                 throw new IllegalStateException("Cannot write to tablestore file " + file);
-            MappedBytes bytes = MappedBytes.mappedBytes(file, 64 << 10, 0, readOnly);
+            MappedBytes bytes = MappedBytes.mappedBytes(INIT, file, 64 << 10, 0, readOnly);
             // eagerly initialize backing MappedFile page - otherwise wire.writeFirstHeader() will try to lock the file
             // to allocate the first byte store and that will cause lock overlap
-            bytes.readVolatileInt(0);
-            Wire wire = wireType.apply(bytes);
-            if (readOnly)
-                return SingleTableStore.doWithSharedLock(file, (v) -> {
-                    try {
-                        return readTableStore(wire);
-                    } catch (IOException ex) {
-                        throw Jvm.rethrow(ex);
-                    }
-                }, () -> null);
-            else
-                return SingleTableStore.doWithExclusiveLock(file, (v) -> {
-                    try {
-                        if (wire.writeFirstHeader()) {
-                            return writeTableStore(bytes, wire);
-                        } else {
-                            return readTableStore(wire);
-                        }
-                    } catch (IOException ex) {
-                        throw Jvm.rethrow(ex);
-                    }
-                }, () -> null);
+            TableStore<T> tableStore = buildTableStore(bytes);
+            bytes.reserveTransfer(INIT, tableStore);
+            return tableStore;
         } catch (IOException e) {
             throw new IORuntimeException("file=" + file.getAbsolutePath(), e);
         }
+    }
+
+    public @NotNull TableStore<T> buildTableStore(MappedBytes bytes) {
+        bytes.readVolatileInt(0);
+        Wire wire = wireType.apply(bytes);
+        if (readOnly)
+            return SingleTableStore.doWithSharedLock(file, (v) -> {
+                try {
+                    return readTableStore(wire);
+                } catch (IOException ex) {
+                    throw Jvm.rethrow(ex);
+                }
+            }, () -> null);
+        else
+            return SingleTableStore.doWithExclusiveLock(file, (v) -> {
+                try {
+                    if (wire.writeFirstHeader()) {
+                        return writeTableStore(bytes, wire);
+                    } else {
+                        return readTableStore(wire);
+                    }
+                } catch (IOException ex) {
+                    throw Jvm.rethrow(ex);
+                }
+            }, () -> null);
     }
 
     @NotNull

@@ -38,7 +38,6 @@ import java.util.stream.Stream;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.*;
 import static org.junit.Assume.assumeThat;
-import static org.junit.Assume.assumeTrue;
 
 public final class AppenderFileHandleLeakTest {
     private static final int THREAD_COUNT = Runtime.getRuntime().availableProcessors() * 2;
@@ -93,7 +92,6 @@ public final class AppenderFileHandleLeakTest {
 
     @Test
     public void appenderAndTailerResourcesShouldBeCleanedUpByGarbageCollection() throws Exception {
-        assumeTrue(OS.isLinux());
 
         // this might help the test be more stable when there is multiple tests.
         GcControls.requestGcCycle();
@@ -126,14 +124,14 @@ public final class AppenderFileHandleLeakTest {
         }
         for (int i = 0; i < 3; i++) {
             if (i > 0)
-
                 GcControls.waitForGcCycle();
             Map<RandomAccessFile, StackTrace> openFiles = CleaningRandomAccessFile.openFiles();
             System.out.println("Open files: " + openFiles.size());
-            openFiles.clear();
         }
-
-        waitForFileHandleCountToDrop(openFileHandleCount, fileHandlesAtStart);
+//        if (OS.isLinux())
+//            waitForFileHandleCountToDrop(openFileHandleCount, fileHandlesAtStart);
+//        else
+        assertEquals(Collections.emptySet(), CleaningRandomAccessFile.openFiles().keySet());
     }
 
     @Test
@@ -204,7 +202,7 @@ public final class AppenderFileHandleLeakTest {
     private void waitForFileHandleCountToDrop(
             final long startFileHandleCount,
             final List<Path> fileHandlesAtStart) throws IOException {
-        final long failAt = System.currentTimeMillis() + 6_000L;
+        final long failAt = System.currentTimeMillis() + 2_000L;
         while (System.currentTimeMillis() < failAt) {
             // the cleaner thread uses weak references, so are only likely to be cleaned after a GC
             System.gc();

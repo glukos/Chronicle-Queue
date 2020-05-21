@@ -21,6 +21,7 @@ import net.openhft.chronicle.bytes.util.DecoratedBufferUnderflowException;
 import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.annotation.PackageLocal;
+import net.openhft.chronicle.core.io.Closeable;
 import net.openhft.chronicle.core.io.IORuntimeException;
 import net.openhft.chronicle.core.pool.StringBuilderPool;
 import net.openhft.chronicle.core.values.LongValue;
@@ -66,13 +67,6 @@ public class SingleChronicleQueueExcerpts {
     //
     // *************************************************************************
 
-    /**
-     * please don't use this interface as its an internal implementation.
-     */
-    public interface InternalAppender {
-        void writeBytes(long index, BytesStore bytes);
-    }
-
     static void releaseIfNotNullAndReferenced(@Nullable final Bytes bytesReference, ReferenceOwner id) {
         if (bytesReference != null) {
             try {
@@ -81,6 +75,13 @@ public class SingleChronicleQueueExcerpts {
                 Jvm.warn().on(SingleChronicleQueueExcerpts.class, e);
             }
         }
+    }
+
+    /**
+     * please don't use this interface as its an internal implementation.
+     */
+    public interface InternalAppender {
+        void writeBytes(long index, BytesStore bytes);
     }
 
 // *************************************************************************
@@ -110,10 +111,22 @@ public class SingleChronicleQueueExcerpts {
         private long lastIndex = Long.MIN_VALUE;
         private long lastPosition;
         private int lastCycle;
-        @Nullable
-        private Pretoucher pretoucher = null;
         private NativeBytesStore<Void> batchTmp;
         private final AtomicBoolean isClosed = new AtomicBoolean();
+        private final ThreadLocal<Bytes<?>> bufferBytes = ThreadLocal.withInitial(Bytes::allocateElasticDirect);
+        private final ThreadLocal<Wire> bufferWire = new ThreadLocal<Wire>() {
+            @Override
+            protected Wire initialValue() {
+                return queue().wireType().apply(bufferBytes.get());
+            }
+
+            @Override
+            public Wire get() {
+                final Wire wire = super.get();
+                bufferBytes.get().clear();
+                return wire;
+            }
+        };
 
         StoreAppender(@NotNull final SingleChronicleQueue queue,
                       @NotNull final WireStorePool storePool,
@@ -145,6 +158,12 @@ public class SingleChronicleQueueExcerpts {
             return store;
         }
 
+        @Override
+        public void checkReleased() {
+            if (!isClosed.get()) throw new IllegalStateException("Not closed");
+            closableResources.checkReleased();
+        }
+
         /**
          * @param marshallable to write to excerpt.
          */
@@ -159,27 +178,21 @@ public class SingleChronicleQueueExcerpts {
             }
         }
 
-        void close() {
+        /**
+         * Can be used to manually release resources when this StoreTailer is no longer used.
+         */
+        @Override
+        public void close() {
             if (isClosed.getAndSet(true)) {
                 return;
             }
             if (Jvm.isDebugEnabled(getClass()))
                 Jvm.debug().on(getClass(), "Closing store appender for " + queue.file().getAbsolutePath());
-            final Wire w0 = wireForIndex;
-            wireForIndex = null;
-            if (w0 != null)
-                releaseIfNotNullAndReferenced(w0.bytes(), INIT);
-            final Wire w = wire;
-            wire = null;
-            if (w != null)
-                releaseIfNotNullAndReferenced(w.bytes(), INIT);
-            if (pretoucher != null)
-                pretoucher.close();
 
-            if (store != null) {
-                storePool.release(this, store);
-                assert store.refCount() == 0;
-            }
+            closableResources.releaseResources();
+
+            wireForIndex = null;
+            wire = null;
             store = null;
         }
 
@@ -192,10 +205,10 @@ public class SingleChronicleQueueExcerpts {
             if (queue.isClosed())
                 throw new RuntimeException("Queue Closed");
             try {
-                if (pretoucher == null)
-                    pretoucher = new Pretoucher(queue());
+                if (closableResources.pretoucher == null)
+                    closableResources.pretoucher = new Pretoucher(queue());
 
-                pretoucher.execute();
+                closableResources.pretoucher.execute();
             } catch (Throwable e) {
                 Jvm.warn().on(getClass(), e);
                 Jvm.rethrow(e);
@@ -209,7 +222,7 @@ public class SingleChronicleQueueExcerpts {
         }
 
         @Override
-        public long batchAppend(final int timeoutMS,final  BatchAppender batchAppender) {
+        public long batchAppend(final int timeoutMS, final BatchAppender batchAppender) {
 
             long maxMsgSize = this.queue.blockSize() / 4;
             long startTime = System.currentTimeMillis();
@@ -312,7 +325,7 @@ public class SingleChronicleQueueExcerpts {
             {
                 Wire oldw = this.wire;
                 this.wire = store == null ? null : createWire(wireType);
-                closableResources.wireReference = this.wire == null ? null : this.wire.bytes();
+                closableResources.bytesReference = this.wire == null ? null : this.wire.bytes();
                 assert wire != oldw || wire == null;
                 if (oldw != null) {
                     releaseWireResources(oldw);
@@ -321,7 +334,7 @@ public class SingleChronicleQueueExcerpts {
             {
                 Wire old = this.wireForIndex;
                 this.wireForIndex = store == null ? null : createWire(wireType);
-                closableResources.wireForIndexReference = this.wireForIndex == null ? null : wireForIndex.bytes();
+                closableResources.bytesForIndexReference = this.wireForIndex == null ? null : wireForIndex.bytes();
                 assert wire != old || wire == null;
                 if (old != null) {
                     releaseWireResources(old);
@@ -330,7 +343,7 @@ public class SingleChronicleQueueExcerpts {
         }
 
         private Wire createWire(@NotNull final WireType wireType) {
-            final Wire w = wireType.apply(store.bytes());
+            final Wire w = wireType.apply(store.bytes(this));
             if (store.dataVersion() > 0)
                 w.usePadding(true);
             return w;
@@ -376,21 +389,6 @@ public class SingleChronicleQueueExcerpts {
         public DocumentContext writingDocument() throws UnrecoverableTimeoutException {
             return writingDocument(false); // avoid overhead of a default method.
         }
-
-        private final ThreadLocal<Bytes<?>> bufferBytes = ThreadLocal.withInitial(Bytes::allocateElasticDirect);
-        private final ThreadLocal<Wire> bufferWire = new ThreadLocal<Wire>() {
-            @Override
-            protected Wire initialValue() {
-                return queue().wireType().apply(bufferBytes.get());
-            }
-
-            @Override
-            public Wire get() {
-                final Wire wire = super.get();
-                bufferBytes.get().clear();
-                return wire;
-            }
-        };
 
         @NotNull
         @Override
@@ -646,7 +644,7 @@ public class SingleChronicleQueueExcerpts {
 
         @Override
         public Runnable getCloserJob() {
-            return closableResources::releaseResources;
+            return this::close;
         }
 
         /*
@@ -890,9 +888,12 @@ public class SingleChronicleQueueExcerpts {
         @NotNull
         private final T storeReleasable;
         private final AtomicBoolean released = new AtomicBoolean();
-        private volatile Bytes wireReference = null;
-        private volatile Bytes wireForIndexReference = null;
+        private volatile Bytes bytesReference = null;
+        private volatile Bytes bytesForIndexReference = null;
         private volatile CommonStore storeReference = null;
+        @Nullable
+        private Pretoucher pretoucher = null;
+
 
         private ClosableResources(ReferenceOwner owner, @NotNull final T storeReleasable) {
             this.owner = owner;
@@ -907,17 +908,23 @@ public class SingleChronicleQueueExcerpts {
         }
 
         void releaseResources() {
-            if (released.compareAndSet(false, true)) {
-                releaseIfNotNull(wireForIndexReference, owner);
-                releaseIfNotNull(wireReference, owner);
-
-                // Object is no longer reachable, check that it has not already been released
-                CommonStore storeReference = this.storeReference;
-
-                if (storeReference != null) {
-                    storeReleasable.release(owner, storeReference);
-                }
+            if (released.getAndSet(true)) {
+                return;
             }
+            releaseIfNotNull(bytesReference, owner);
+
+            // Object is no longer reachable, check that it has not already been released
+            if (storeReference != null) {
+                storeReleasable.release(owner, storeReference);
+            }
+            Closeable.closeQuietly(pretoucher);
+            pretoucher = null;
+            storeReference = null;
+        }
+
+        public void checkReleased() {
+            if (!released.get())
+                throw new IllegalStateException("Not released");
         }
     }
 
@@ -945,6 +952,7 @@ public class SingleChronicleQueueExcerpts {
         private boolean readingDocumentFound = false;
         private long address = NO_PAGE;
         private boolean striding = false;
+        private volatile boolean closed;
 
         public StoreTailer(@NotNull final SingleChronicleQueue queue) {
             this(queue, null);
@@ -964,14 +972,6 @@ public class SingleChronicleQueueExcerpts {
                 moveToIndex(indexValue.getVolatileValue());
             }
             Jvm.debug().on(getClass(), "Created a tailer");
-        }
-
-        @Override
-        protected void finalize() throws Throwable {
-            if (!isClosed.get())
-                Jvm.warn().on(getClass(), "Discarded without being closed");
-            close();
-            super.finalize();
         }
 
         @Nullable
@@ -1018,6 +1018,14 @@ public class SingleChronicleQueueExcerpts {
         }
 
         @Override
+        protected void finalize() throws Throwable {
+            if (!closed)
+                Jvm.warn().on(getClass(), "Discarded without being closed");
+            close();
+            super.finalize();
+        }
+
+        @Override
         public boolean readDocument(@NotNull final ReadMarshallable reader) {
             try (@NotNull DocumentContext dc = readingDocument(false)) {
                 if (!dc.isPresent())
@@ -1038,12 +1046,14 @@ public class SingleChronicleQueueExcerpts {
             return readingDocument(false);
         }
 
-        private final AtomicBoolean isClosed = new AtomicBoolean();
-
-        private void close() {
-            if (isClosed.getAndSet(true)) {
+        public void close() {
+            if (closed) {
                 return;
             }
+            closed = true;
+            state = UNINITIALISED;
+            queue.removeCloseListener(this);
+
             if (Jvm.isDebugEnabled(getClass()))
                 Jvm.debug().on(getClass(), "Closing store tailer for " + queue.file().getAbsolutePath());
             // the wire ref count will be released here by setting it to null
@@ -1052,11 +1062,9 @@ public class SingleChronicleQueueExcerpts {
             if (w0 != null)
                 releaseIfNotNullAndReferenced(w0.bytes(), this);
             wireForIndex = null;
-            if (store != null) {
-                store.releaseLast(this);
-            }
             if (w0 != null)
                 assert w0.bytes().refCount() == 0;
+            queue.release(this, store);
             store = null;
         }
 
@@ -1635,23 +1643,21 @@ public class SingleChronicleQueueExcerpts {
         private void resetWires() {
             final WireType wireType = queue.wireType();
 
-            MappedBytes mbytes = store.bytes();
-            mbytes.reserve(this);
+            MappedBytes mbytes = store.bytes(this);
             final AbstractWire wire = (AbstractWire) readAnywhere(wireType.apply(mbytes));
             assert !CHECK_INDEX || headerNumberCheck(wire);
             this.context.wire(wire);
             wire.parent(this);
 
             final Wire wireForIndexOld = wireForIndex;
-            MappedBytes bytes = store().bytes();
-            bytes.reserveTransfer(INIT, this);
-            wireForIndex = readAnywhere(wireType.apply(bytes));
-            closableResources.wireForIndexReference = wireForIndex.bytes();
-            closableResources.wireReference = wire.bytes();
+            wireForIndex = readAnywhere(wireType.apply(mbytes));
+            closableResources.bytesForIndexReference = wireForIndex.bytes();
+            closableResources.bytesReference = wire.bytes();
             assert !CHECK_INDEX || headerNumberCheck((AbstractWire) wireForIndex);
             assert wire != wireForIndexOld;
 
             if (wireForIndexOld != null) {
+                wireForIndexOld.bytes().release(this);
                 releaseWireResources(wireForIndexOld);
             }
         }
@@ -1807,16 +1813,9 @@ public class SingleChronicleQueueExcerpts {
         }
 
         @Override
-        public Runnable getCloserJob() {
-            return closableResources::releaseResources;
-        }
-
-        /**
-         * Can be used to manually release resources when this StoreTailer is no longer used.
-         */
-        public void releaseResources() {
-            queue.removeCloseListener(this);
-            getCloserJob().run();
+        public void checkReleased() {
+            if (closed) return;
+            throw new IllegalStateException("Not closed");
         }
 
         @PackageLocal
@@ -1923,15 +1922,6 @@ public class SingleChronicleQueueExcerpts {
             wire.parent(this);
             wire.pauser(queue.pauserSupplier.get());
             return true;
-        }
-
-        void release() {
-            if (store != null) {
-                queue.release(this, store);
-                store = null;
-                closableResources.storeReference = null;
-            }
-            state = UNINITIALISED;
         }
 
         @Override

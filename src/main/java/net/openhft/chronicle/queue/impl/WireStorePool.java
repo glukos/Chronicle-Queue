@@ -53,11 +53,9 @@ public class WireStorePool implements StoreReleasable {
     public WireStore acquire(ReferenceOwner owner, final int cycle, final long epoch, boolean createIfAbsent) {
         if (isClosed)
             throw new IllegalStateException("Closed", closedHere);
-        WireStore store = this.supplier.acquire(cycle, createIfAbsent);
-        if (store != null) {
+        WireStore store = this.supplier.acquire(owner, cycle, createIfAbsent);
+        if (store != null)
             storeFileListener.onAcquired(cycle, store.file());
-            store.reserveTransfer(ReferenceOwner.INIT, owner);
-        }
         return store;
     }
 

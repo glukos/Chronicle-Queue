@@ -70,8 +70,7 @@ public class DumpQueueMain {
 
     private static void dumpFile(@NotNull File file, @NotNull PrintStream out, long upperLimit) {
         Bytes<ByteBuffer> buffer = Bytes.elasticByteBuffer();
-        try {
-            MappedBytes bytes = MappedBytes.mappedBytes(file, 4 << 20, OS.pageSize(), !OS.isWindows());
+        try (MappedBytes bytes = MappedBytes.mappedBytes(file, 4 << 20, OS.pageSize(), !OS.isWindows())) {
             bytes.readLimit(bytes.realCapacity());
             StringBuilder sb = new StringBuilder();
             WireDumper dumper = WireDumper.of(bytes, !UNALIGNED);
@@ -99,8 +98,6 @@ public class DumpQueueMain {
             }
         } catch (IOException ioe) {
             err.println("Failed to read " + file + " " + ioe);
-        } finally {
-            buffer.releaseLast();
         }
     }
 

@@ -15,6 +15,7 @@
  */
 package net.openhft.chronicle.queue;
 
+import net.openhft.chronicle.core.io.Closeable;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -23,7 +24,7 @@ import org.jetbrains.annotations.NotNull;
  *
  * @author peter.lawrey
  */
-public interface ExcerptCommon<E extends ExcerptCommon<E>> {
+public interface ExcerptCommon<E extends ExcerptCommon<E>> extends Closeable {
 
     /**
      * Returns the source id of the backing ChronicleQueue
@@ -39,8 +40,13 @@ public interface ExcerptCommon<E extends ExcerptCommon<E>> {
      * ExcerptCommon is attached to.
      *
      * @return the backing ChronicleQueue to which this
-     *         ExcerptCommon is attached to
+     * ExcerptCommon is attached to
      */
     @NotNull
     ChronicleQueue queue();
+
+    /**
+     * Used in testing to ensure all resources have been released.
+     */
+    void checkReleased();
 }

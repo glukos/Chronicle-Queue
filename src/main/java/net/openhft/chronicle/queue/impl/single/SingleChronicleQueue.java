@@ -23,6 +23,7 @@ import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.OS;
 import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.annotation.PackageLocal;
+import net.openhft.chronicle.core.io.Closeable;
 import net.openhft.chronicle.core.threads.EventLoop;
 import net.openhft.chronicle.core.threads.ThreadLocalHelper;
 import net.openhft.chronicle.core.time.TimeProvider;
@@ -67,7 +68,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     private static final boolean SHOULD_CHECK_CYCLE = Boolean.getBoolean("chronicle.queue.checkrollcycle");
     private static final boolean SHOULD_RELEASE_RESOURCES = Boolean.parseBoolean(
             System.getProperty("chronicle.queue.release.weakRef.resources", "" + true));
-
+    static long lastTimeMapped = 0;
     protected final ThreadLocal<WeakReference<ExcerptAppender>> weakExcerptAppenderThreadLocal = new ThreadLocal<>();
     protected final ThreadLocal<ExcerptAppender> strongExcerptAppenderThreadLocal = new ThreadLocal<>();
     @NotNull
@@ -98,7 +99,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     private final TimeProvider time;
     @NotNull
     private final BiFunction<RollingChronicleQueue, Wire, WireStore> storeFactory;
-    private final Map<Object, Consumer> closers = new WeakHashMap<>();
+    private final Map<Object, Consumer> closers = Collections.synchronizedMap(new WeakHashMap<>());
     private final boolean readOnly;
     @NotNull
     private final CycleCalculator cycleCalculator;
@@ -199,7 +200,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
                     this,
                     StoreTailer::new,
                     StoreComponentReferenceHandler.tailerQueue(),
-                    (ref) -> StoreComponentReferenceHandler.register(ref, ref.get().getCloserJob()));
+                    (ref) -> StoreComponentReferenceHandler.register(ref, ref.get()::close));
         }
         return ThreadLocalHelper.getTL(tlTailer, this, StoreTailer::new);
     }
@@ -456,7 +457,6 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         return appender.getCloserJob();
     }
 
-
     @Override
     @NotNull
     public QueueLock queueLock() {
@@ -479,7 +479,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         if (SHOULD_RELEASE_RESOURCES) {
             StoreComponentReferenceHandler.register(
                     new WeakReference<>(storeTailer, StoreComponentReferenceHandler.tailerQueue()),
-                    storeTailer.getCloserJob());
+                    storeTailer::close);
         }
         return storeTailer;
     }
@@ -502,8 +502,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     }
 
     public long exceptsPerCycle(int cycle) {
-        StoreTailer tailer = acquireTailer();
-        try {
+        try (StoreTailer tailer = acquireTailer()) {
             long index = rollCycle.toIndex(cycle, 0);
             if (tailer.moveToIndex(index)) {
                 assert tailer.store != null && tailer.store.refCount() > 0;
@@ -513,8 +512,6 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
             }
         } catch (StreamCorruptedException e) {
             throw new IllegalStateException(e);
-        } finally {
-            tailer.release();
         }
     }
 
@@ -608,9 +605,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     }
 
     public <T> void addCloseListener(T key, Consumer<T> closer) {
-        synchronized (closers) {
-            closers.put(key, closer);
-        }
+        closers.put(key, closer);
     }
 
     @Override
@@ -625,14 +620,22 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         if (isClosed.getAndSet(true))
             return;
 
-        closeQuietly(directoryListing, queueLock, writeLock, lastAcknowledgedIndexReplicated, lastIndexReplicated);
+        closeQuietly(
+                directoryListing,
+                queueLock,
+                writeLock,
+                lastAcknowledgedIndexReplicated,
+                lastIndexReplicated,
+                pool,
+                metaStore);
 
-        synchronized (closers) {
-            closers.forEach((k, v) -> v.accept(k));
-            closers.clear();
+        Map<Object, Consumer> closers;
+        synchronized (this.closers) {
+            closers = new HashMap<>(this.closers);
+            this.closers.clear();
         }
-        this.pool.close();
-        closeQuietly(metaStore);
+        closers.forEach((k, v) -> v.accept(k));
+        closeQuietly(storeSupplier);
     }
 
     @Override
@@ -726,13 +729,13 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         return this.blockSize;
     }
 
-    public long overlapSize() {
-        return this.overlapSize;
-    }
-
     // *************************************************************************
     //
     // *************************************************************************
+
+    public long overlapSize() {
+        return this.overlapSize;
+    }
 
     @NotNull
     @Override
@@ -785,9 +788,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     }
 
     void removeCloseListener(final StoreTailer storeTailer) {
-        synchronized (closers) {
-            closers.remove(storeTailer);
-        }
+        closers.remove(storeTailer);
     }
 
     public TableStore metaStore() {
@@ -807,7 +808,10 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
                     if (store.writePosition() == 0 && !store.file().delete() && store.file().exists()) {
                         // couldn't delete? Let's try writing EOF
                         // if this blows up we should blow up too so don't catch anything
-                        ((SingleChronicleQueueStore) store).writeEOFAndShrink(wireType.apply(store.bytes()), timeoutMS);
+                        ReferenceOwner temp = ReferenceOwner.temporary("cleanupStoreFilesWithNoData");
+                        MappedBytes bytes = store.bytes(temp);
+                        ((SingleChronicleQueueStore) store).writeEOFAndShrink(wireType.apply(bytes), timeoutMS);
+                        bytes.releaseLast(temp);
                         lastCycle--;
                         continue;
                     }
@@ -833,9 +837,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         }
     }
 
-    static long lastTimeMapped = 0;
-
-    private class StoreSupplier implements WireStoreSupplier {
+    private class StoreSupplier implements WireStoreSupplier, Closeable {
         private final AtomicReference<CachedCycleTree> cachedTree = new AtomicReference<>();
         private final ReferenceCountedCache<File, MappedFile, MappedBytes, IOException> mappedFileCache =
                 new ReferenceCountedCache<>(MappedBytes::mappedBytes, SingleChronicleQueue.this::mappedFile);
@@ -843,7 +845,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
 
         @SuppressWarnings("resource")
         @Override
-        public WireStore acquire(int cycle, boolean createIfAbsent) {
+        public WireStore acquire(ReferenceOwner owner, int cycle, boolean createIfAbsent) {
 
             SingleChronicleQueue that = SingleChronicleQueue.this;
             @NotNull final RollingResourcesCache.Resource dateValue = that
@@ -868,12 +870,11 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
 
                 MappedBytes mappedBytes;
                 try {
-                    mappedBytes = mappedFileCache.get(path);
+                    mappedBytes = mappedFileCache.get(owner, path);
                 } catch (FileNotFoundException e) {
                     createFile(path);
-                    mappedBytes = mappedFileCache.get(path);
+                    mappedBytes = mappedFileCache.get(owner, path);
                 }
-
                 pauseUnderload();
 
                 if (SHOULD_CHECK_CYCLE && cycle != rollCycle.current(time, epoch)) {
@@ -1072,6 +1073,11 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
             if (!file.exists())
                 throw new IllegalStateException("'file not found' for the " + m + ", file=" + file);
             return dateCache.toLong(file);
+        }
+
+        @Override
+        public void close() {
+            Closeable.closeQuietly(mappedFileCache);
         }
     }
 }

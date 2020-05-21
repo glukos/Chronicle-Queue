@@ -69,6 +69,7 @@ public class ChronicleQueueTestBase {
     //
     // *************************************************************************
 
+    @Deprecated
     static void deleteDir(@NotNull String... dirs) {
         for (String dir : dirs) {
             try {

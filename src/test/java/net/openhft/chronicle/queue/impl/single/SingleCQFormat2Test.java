@@ -228,10 +228,10 @@ public class SingleCQFormat2Test extends ChronicleQueueTestBase {
 
     public void checkFileContents(@NotNull File file, String expected) throws FileNotFoundException {
 
-        @NotNull MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE);
-        bytes.readLimit(bytes.realCapacity());
-        assertEquals(expected, Wires.fromAlignedSizePrefixedBlobs(bytes));
-        bytes.releaseLast();
+        try (@NotNull MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE)) {
+            bytes.readLimit(bytes.realCapacity());
+            assertEquals(expected, Wires.fromAlignedSizePrefixedBlobs(bytes));
+        }
     }
 
     @Test

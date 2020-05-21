@@ -174,29 +174,23 @@ public class SingleChronicleQueueStore implements WireStore {
     }
 
     private String dump(boolean abbrev) {
-        MappedBytes bytes = MappedBytes.mappedBytes(mappedFile);
-        try {
+        try (MappedBytes bytes = MappedBytes.mappedBytes(mappedFile)) {
             bytes.readLimit(bytes.realCapacity());
             final Wire w = WireType.BINARY.apply(bytes);
             if (dataVersion > 0)
                 w.usePadding(true);
             return Wires.fromSizePrefixedBlobs(w, abbrev);
-        } finally {
-            bytes.releaseLast();
         }
     }
 
     @Override
     public String dumpHeader() {
-        MappedBytes bytes = MappedBytes.mappedBytes(mappedFile);
-        try {
+        try (MappedBytes bytes = MappedBytes.mappedBytes(mappedFile)) {
             int size = bytes.readInt(0);
             if (!Wires.isReady(size))
                 return "not ready";
             bytes.readLimit(Wires.lengthOf(size) + 4);
             return Wires.fromSizePrefixedBlobs(bytes);
-        } finally {
-            bytes.releaseLast();
         }
     }
 
@@ -273,8 +267,8 @@ public class SingleChronicleQueueStore implements WireStore {
      */
     @NotNull
     @Override
-    public MappedBytes bytes() {
-        return MappedBytes.mappedBytes(mappedFile);
+    public MappedBytes bytes(ReferenceOwner owner) {
+        return MappedBytes.mappedBytes(owner, mappedFile);
     }
 
     @Override
@@ -365,7 +359,7 @@ public class SingleChronicleQueueStore implements WireStore {
             }
         }
 
-        try (MappedBytes bytes = MappedBytes.mappedBytes(mappedFile.file(), mappedFile.chunkSize())) {
+        try (MappedBytes bytes = MappedBytes.mappedBytes(INIT, mappedFile.file(), mappedFile.chunkSize())) {
             Wire wire0 = WireType.valueOf(wire).apply(bytes);
             return writeEOFAndShrink(wire0, timeoutMS);
 

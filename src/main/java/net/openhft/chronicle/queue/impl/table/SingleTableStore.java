@@ -167,12 +167,9 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
 
     private String dump(boolean abbrev) {
 
-        MappedBytes bytes = MappedBytes.mappedBytes(mappedFile);
-        try {
+        try (MappedBytes bytes = MappedBytes.mappedBytes(mappedFile)) {
             bytes.readLimit(bytes.realCapacity());
             return Wires.fromSizePrefixedBlobs(bytes, abbrev);
-        } finally {
-            bytes.releaseLast();
         }
     }
 
@@ -220,8 +217,8 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
      */
     @NotNull
     @Override
-    public MappedBytes bytes() {
-        return MappedBytes.mappedBytes(mappedFile);
+    public MappedBytes bytes(ReferenceOwner owner) {
+        return MappedBytes.mappedBytes(owner, mappedFile);
     }
 
     @NotNull

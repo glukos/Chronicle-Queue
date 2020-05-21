@@ -62,7 +62,7 @@ public class ReadonlyTableStore<T extends Metadata> implements TableStore<T> {
 
     @NotNull
     @Override
-    public MappedBytes bytes() {
+    public MappedBytes bytes(ReferenceOwner owner) {
         throw newReadOnly();
     }
 

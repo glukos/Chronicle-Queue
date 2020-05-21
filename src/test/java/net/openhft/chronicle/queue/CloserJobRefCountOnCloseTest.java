@@ -20,9 +20,9 @@ public class CloserJobRefCountOnCloseTest {
             String s = tailer.readText();
             if (tailer instanceof SingleChronicleQueueExcerpts.StoreTailer) {
                 final SingleChronicleQueueExcerpts.StoreTailer storeTailer = (SingleChronicleQueueExcerpts.StoreTailer) tailer;
-                storeTailer.releaseResources();
+                storeTailer.close();
             }
-            tailer.getCloserJob().run();
+            ((Runnable) tailer::close).run();
         }
     }
 }
