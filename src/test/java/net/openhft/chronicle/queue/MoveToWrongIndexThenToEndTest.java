@@ -161,7 +161,7 @@ public class MoveToWrongIndexThenToEndTest {
     private long approximateLastIndex(int cycle, SingleChronicleQueue queue,
                                       SingleChronicleQueueExcerpts.StoreTailer tailer) {
         try {
-            ReferenceOwner temp = ReferenceOwner.temporary();
+            ReferenceOwner temp = ReferenceOwner.temporary("approximateLastIndex");
             WireStore wireStore = queue.storeForCycle(temp, cycle, queue.epoch(), false);
             if (wireStore == null) {
                 return noIndex;

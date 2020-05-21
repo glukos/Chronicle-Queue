@@ -154,7 +154,7 @@ public class RollEOFTest {
         long chunkSize = OS.pageAlign(blockSize);
         long overlapSize = OS.pageAlign(blockSize / 4);
         final MappedBytes mappedBytes = MappedBytes.mappedBytes(path.toFile(), chunkSize, overlapSize, false);
-        ReferenceOwner eof = ReferenceOwner.temporary();
+        ReferenceOwner eof = ReferenceOwner.temporary("removeEOF");
         mappedBytes.reserve(eof);
         try {
             final Wire wire = WireType.BINARY_LIGHT.apply(mappedBytes);

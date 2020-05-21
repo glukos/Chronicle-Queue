@@ -2,7 +2,10 @@ package net.openhft.chronicle.queue.impl.single;
 
 import net.openhft.chronicle.bytes.Bytes;
 import net.openhft.chronicle.bytes.BytesUtil;
+import net.openhft.chronicle.core.CleaningRandomAccessFile;
+import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.OS;
+import net.openhft.chronicle.core.StackTrace;
 import net.openhft.chronicle.core.time.SystemTimeProvider;
 import net.openhft.chronicle.core.time.TimeProvider;
 import net.openhft.chronicle.queue.*;
@@ -18,6 +21,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,6 +38,7 @@ import java.util.stream.Stream;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.*;
 import static org.junit.Assume.assumeThat;
+import static org.junit.Assume.assumeTrue;
 
 public final class AppenderFileHandleLeakTest {
     private static final int THREAD_COUNT = Runtime.getRuntime().availableProcessors() * 2;
@@ -64,25 +69,13 @@ public final class AppenderFileHandleLeakTest {
         };
     }
 
-    private static void readMessage(final ChronicleQueue queue,
-                                    final boolean manuallyReleaseResources,
+    private static void readMessage(final ExcerptTailer tailer,
                                     final Consumer<ExcerptTailer> refHolder) {
         final Bytes<ByteBuffer> bytes = Bytes.elasticByteBuffer();
         try {
-            final ExcerptTailer tailer = queue.createTailer();
-            while (bytes.isEmpty()) {
-                tailer.toStart().readBytes(bytes);
-            }
+            tailer.readBytes(bytes);
             refHolder.accept(tailer);
-            assertThat(Math.signum(bytes.readInt()) >= 0, is(true));
-
-            if (manuallyReleaseResources) {
-                try {
-                    ((SingleChronicleQueueExcerpts.StoreTailer) tailer).releaseResources();
-                } catch (RuntimeException e) {
-                    // ignore
-                }
-            }
+            assertTrue(Math.signum(bytes.readInt()) >= 0);
         } finally {
             bytes.releaseLast();
         }
@@ -100,7 +93,7 @@ public final class AppenderFileHandleLeakTest {
 
     @Test
     public void appenderAndTailerResourcesShouldBeCleanedUpByGarbageCollection() throws Exception {
-        assumeThat(OS.isLinux(), is(true));
+        assumeTrue(OS.isLinux());
 
         // this might help the test be more stable when there is multiple tests.
         GcControls.requestGcCycle();
@@ -108,14 +101,16 @@ public final class AppenderFileHandleLeakTest {
         final List<ExcerptTailer> gcGuard = new LinkedList<>();
         long openFileHandleCount = countFileHandlesOfCurrentProcess();
         List<Path> fileHandlesAtStart = new ArrayList<>(lastFileHandles);
-        try (ChronicleQueue queue = createQueue(SYSTEM_TIME_PROVIDER)) {
+        ChronicleQueue queue2 = null;
+        try (ChronicleQueue queue = queue2 = createQueue(SYSTEM_TIME_PROVIDER)) {
             final List<Future<Boolean>> futures = new LinkedList<>();
 
             for (int i = 0; i < THREAD_COUNT; i++) {
                 futures.add(threadPool.submit(() -> {
+                    ExcerptTailer tailer = queue.createTailer();
                     for (int j = 0; j < MESSAGES_PER_THREAD; j++) {
                         writeMessage(j, queue);
-                        readMessage(queue, false, gcGuard::add);
+                        readMessage(tailer, gcGuard::add);
                     }
                     GcControls.requestGcCycle();
                     return Boolean.TRUE;
@@ -129,42 +124,16 @@ public final class AppenderFileHandleLeakTest {
             gcGuard.clear();
 
         }
-        GcControls.waitForGcCycle();
-        GcControls.waitForGcCycle();
+        for (int i = 0; i < 3; i++) {
+            if (i > 0)
+
+                GcControls.waitForGcCycle();
+            Map<RandomAccessFile, StackTrace> openFiles = CleaningRandomAccessFile.openFiles();
+            System.out.println("Open files: " + openFiles.size());
+            openFiles.clear();
+        }
 
         waitForFileHandleCountToDrop(openFileHandleCount, fileHandlesAtStart);
-    }
-
-    @Test
-    public void tailerResourcesCanBeReleasedManually() throws Exception {
-        assumeThat(OS.isLinux(), is(true));
-
-        GcControls.requestGcCycle();
-        Thread.sleep(100);
-        try (ChronicleQueue queue = createQueue(SYSTEM_TIME_PROVIDER)) {
-            final long openFileHandleCount = countFileHandlesOfCurrentProcess();
-            final List<Path> fileHandlesAtStart = new ArrayList<>(lastFileHandles);
-            final List<Future<Boolean>> futures = new LinkedList<>();
-            final List<ExcerptTailer> gcGuard = new LinkedList<>();
-
-            for (int i = 0; i < THREAD_COUNT; i++) {
-                futures.add(threadPool.submit(() -> {
-                    for (int j = 0; j < MESSAGES_PER_THREAD; j++) {
-                        writeMessage(j, queue);
-                        readMessage(queue, true, gcGuard::add);
-                    }
-                    return Boolean.TRUE;
-                }));
-            }
-
-            for (Future<Boolean> future : futures) {
-                assertThat(future.get(1, TimeUnit.MINUTES), is(true));
-            }
-
-            waitForFileHandleCountToDrop(openFileHandleCount, fileHandlesAtStart);
-
-            assertFalse(gcGuard.isEmpty());
-        }
     }
 
     @Test
@@ -235,14 +204,16 @@ public final class AppenderFileHandleLeakTest {
     private void waitForFileHandleCountToDrop(
             final long startFileHandleCount,
             final List<Path> fileHandlesAtStart) throws IOException {
-        final long failAt = System.currentTimeMillis() + 60_000L;
+        final long failAt = System.currentTimeMillis() + 6_000L;
         while (System.currentTimeMillis() < failAt) {
             // the cleaner thread uses weak references, so are only likely to be cleaned after a GC
             System.gc();
-            if (countFileHandlesOfCurrentProcess() <= startFileHandleCount + 2) {
+            long files = countFileHandlesOfCurrentProcess();
+            System.out.println("Files open: " + files);
+            if (files <= startFileHandleCount + 2) {
                 return;
             }
-            Thread.yield();
+            Jvm.pause(250);
         }
 
         final List<Path> fileHandlesAtEnd = new ArrayList<>(lastFileHandles);
@@ -269,13 +240,14 @@ public final class AppenderFileHandleLeakTest {
     }
 
     private ChronicleQueue createQueue(final TimeProvider timeProvider) {
-        return SingleChronicleQueueBuilder.
-                binary(queuePath).
-                rollCycle(RollCycles.TEST_SECONDLY).
-                wireType(WireType.BINARY_LIGHT).
-                storeFileListener(storeFileListener).
-                timeProvider(timeProvider).
-                build();
+        return SingleChronicleQueueBuilder
+                .binary(queuePath)
+                .testBlockSize()
+                .rollCycle(RollCycles.TEST_SECONDLY)
+                .wireType(WireType.BINARY_LIGHT)
+                .storeFileListener(storeFileListener)
+                .timeProvider(timeProvider)
+                .build();
     }
 
     private static final class TrackingStoreFileListener implements StoreFileListener {

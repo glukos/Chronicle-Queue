@@ -159,28 +159,28 @@ public class SingleChronicleQueueExcerpts {
             }
         }
 
-
         void close() {
-            if (!isClosed.getAndSet(true)) {
-                if (Jvm.isDebugEnabled(getClass()))
-                    Jvm.debug().on(getClass(), "Closing store append for " + queue.file().getAbsolutePath());
-                final Wire w0 = wireForIndex;
-                wireForIndex = null;
-                if (w0 != null)
-                    releaseIfNotNullAndReferenced(w0.bytes(), INIT);
-                final Wire w = wire;
-                wire = null;
-                if (w != null)
-                    releaseIfNotNullAndReferenced(w.bytes(), INIT);
-                if (pretoucher != null)
-                    pretoucher.close();
-
-                if (store != null) {
-                    storePool.release(this, store);
-                }
-                store = null;
-                storePool.close();
+            if (isClosed.getAndSet(true)) {
+                return;
             }
+            if (Jvm.isDebugEnabled(getClass()))
+                Jvm.debug().on(getClass(), "Closing store appender for " + queue.file().getAbsolutePath());
+            final Wire w0 = wireForIndex;
+            wireForIndex = null;
+            if (w0 != null)
+                releaseIfNotNullAndReferenced(w0.bytes(), INIT);
+            final Wire w = wire;
+            wire = null;
+            if (w != null)
+                releaseIfNotNullAndReferenced(w.bytes(), INIT);
+            if (pretoucher != null)
+                pretoucher.close();
+
+            if (store != null) {
+                storePool.release(this, store);
+                assert store.refCount() == 0;
+            }
+            store = null;
         }
 
         /**
@@ -735,6 +735,14 @@ public class SingleChronicleQueueExcerpts {
             wire.bytes().writePosition(startOfMessage);
         }
 
+        @Override
+        protected void finalize() throws Throwable {
+            if (!isClosed.get())
+                Jvm.warn().on(getClass(), "Discarded without being closed");
+            close();
+            super.finalize();
+        }
+
         class StoreAppenderContext implements DocumentContext {
 
             boolean isClosed;
@@ -955,6 +963,15 @@ public class SingleChronicleQueueExcerpts {
             } else {
                 moveToIndex(indexValue.getVolatileValue());
             }
+            Jvm.debug().on(getClass(), "Created a tailer");
+        }
+
+        @Override
+        protected void finalize() throws Throwable {
+            if (!isClosed.get())
+                Jvm.warn().on(getClass(), "Discarded without being closed");
+            close();
+            super.finalize();
         }
 
         @Nullable
@@ -1024,18 +1041,23 @@ public class SingleChronicleQueueExcerpts {
         private final AtomicBoolean isClosed = new AtomicBoolean();
 
         private void close() {
-            if (!isClosed.getAndSet(true)) {
-                // the wire ref count will be released here by setting it to null
-                context.wire(null);
-                final Wire w0 = wireForIndex;
-                if (w0 != null)
-                    releaseIfNotNullAndReferenced(w0.bytes(), this);
-                wireForIndex = null;
-                if (store != null) {
-                    queue.release(this, store);
-                }
-                store = null;
+            if (isClosed.getAndSet(true)) {
+                return;
             }
+            if (Jvm.isDebugEnabled(getClass()))
+                Jvm.debug().on(getClass(), "Closing store tailer for " + queue.file().getAbsolutePath());
+            // the wire ref count will be released here by setting it to null
+            context.wire(null);
+            final Wire w0 = wireForIndex;
+            if (w0 != null)
+                releaseIfNotNullAndReferenced(w0.bytes(), this);
+            wireForIndex = null;
+            if (store != null) {
+                store.releaseLast(this);
+            }
+            if (w0 != null)
+                assert w0.bytes().refCount() == 0;
+            store = null;
         }
 
         @Override

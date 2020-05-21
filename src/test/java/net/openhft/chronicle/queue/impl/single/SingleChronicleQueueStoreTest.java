@@ -28,7 +28,7 @@ public class SingleChronicleQueueStoreTest {
 
     private static void assertExcerptsAreIndexed(final RollingChronicleQueue queue, final long[] indices,
                                                  final Function<Integer, Boolean> shouldBeIndexed, final ScanResult expectedScanResult) {
-        ReferenceOwner temp = ReferenceOwner.temporary();
+        ReferenceOwner temp = ReferenceOwner.temporary("assertExcerptsAreIndexed");
         final SingleChronicleQueueStore wireStore = (SingleChronicleQueueStore)
                 queue.storeForCycle(temp, queue.cycle(), 0L, true);
         try {

@@ -39,7 +39,7 @@ public class StuckQueueTest {
                 ExcerptTailer tailer = q.createTailer();
 
                 int cycle = q.rollCycle().toCycle(0x18406e100000000L);
-                ReferenceOwner temp = ReferenceOwner.temporary();
+                ReferenceOwner temp = ReferenceOwner.temporary("test");
                 WireStore wireStore = q.storeForCycle(temp, cycle, q.epoch(), false);
                 try {
                     String absolutePath = wireStore.file().getAbsolutePath();

@@ -400,6 +400,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         queueLock.waitForLock();
 
         final WireStorePool newPool = WireStorePool.withSupplier(storeSupplier, storeFileListener);
+        Jvm.debug().on(getClass(), "Created an appender");
         return new StoreAppender(this, newPool, checkInterrupts);
     }
 

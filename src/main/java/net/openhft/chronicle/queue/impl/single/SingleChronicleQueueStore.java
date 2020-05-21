@@ -254,7 +254,7 @@ public class SingleChronicleQueueStore implements WireStore {
 
     @Override
     public void releaseLast(ReferenceOwner id) {
-        this.refCount.releaseLast();
+        this.refCount.releaseLast(id);
     }
 
     @Override
