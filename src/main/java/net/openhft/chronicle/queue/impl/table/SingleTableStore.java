@@ -135,7 +135,7 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
 
                         if (Jvm.isDebugEnabled(SingleTableStore.class)) {
                             String message = "Failed to acquire " + type + " lock on the table store file. Retrying, file=" + file.getAbsolutePath();
-                            Jvm.debug().on(SingleTableStore.class, message, new StackTrace());
+                            Jvm.debug().on(SingleTableStore.class, message);
                         }
                         warnedOnFailure = true;
                     }

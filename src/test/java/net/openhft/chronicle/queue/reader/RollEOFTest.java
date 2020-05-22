@@ -152,7 +152,7 @@ public class RollEOFTest {
         long blockSize = 64 << 10;
         long chunkSize = OS.pageAlign(blockSize);
         long overlapSize = OS.pageAlign(blockSize / 4);
-        try (final MappedBytes mappedBytes = MappedBytes.mappedBytes(path.toFile(), chunkSize, overlapSize, false)) {
+        try (final MappedBytes mappedBytes = MappedBytes.mappedBytes(path.toFile(), chunkSize, overlapSize)) {
             final Wire wire = WireType.BINARY_LIGHT.apply(mappedBytes);
             final Bytes<?> bytes = wire.bytes();
             bytes.readLimit(bytes.capacity());

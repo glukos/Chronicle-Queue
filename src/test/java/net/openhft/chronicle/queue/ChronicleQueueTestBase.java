@@ -16,6 +16,7 @@
 package net.openhft.chronicle.queue;
 
 import net.openhft.chronicle.bytes.BytesUtil;
+import net.openhft.chronicle.bytes.MappedFile;
 import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.wire.WireKey;
 import org.jetbrains.annotations.NotNull;
@@ -113,6 +114,11 @@ public class ChronicleQueueTestBase {
     @After
     public void checkRegisteredBytes() {
         BytesUtil.checkRegisteredBytes();
+    }
+
+    @After
+    public void checkFiles() {
+        MappedFile.checkMappedFiles();
     }
 
     public enum TestKey implements WireKey {
