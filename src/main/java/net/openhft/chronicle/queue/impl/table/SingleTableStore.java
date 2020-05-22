@@ -236,7 +236,7 @@ public class SingleTableStore<T extends Metadata> implements TableStore<T> {
     // *************************************************************************
 
     private void onCleanup() {
-        mappedBytes.releaseLast();
+        mappedBytes.release(this);
     }
 
     @Override

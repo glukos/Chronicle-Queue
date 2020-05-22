@@ -800,15 +800,15 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         try {
             int cycle = cycle();
             int lastCycle = lastCycle();
+            ReferenceOwner temp = ReferenceOwner.temporary("cleanupStoreFilesWithNoData");
             while (lastCycle < cycle && lastCycle >= 0) {
-                final WireStore store = storeSupplier.get(lastCycle);
+                final WireStore store = storeSupplier.get(temp, lastCycle);
                 if (store == null)
                     return;
                 try {
                     if (store.writePosition() == 0 && !store.file().delete() && store.file().exists()) {
                         // couldn't delete? Let's try writing EOF
                         // if this blows up we should blow up too so don't catch anything
-                        ReferenceOwner temp = ReferenceOwner.temporary("cleanupStoreFilesWithNoData");
                         MappedBytes bytes = store.bytes(temp);
                         ((SingleChronicleQueueStore) store).writeEOFAndShrink(wireType.apply(bytes), timeoutMS);
                         bytes.releaseLast(temp);
@@ -817,7 +817,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
                     }
                     break;
                 } finally {
-                    store.releaseLast();
+                    store.release(temp);
                 }
             }
             directoryListing.refresh();
@@ -910,6 +910,8 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
                             throw new StreamCorruptedException("The first message should be the header, was " + name);
                         }
                     }
+                    wireStore.reserve(owner);
+
                 } catch (InternalError e) {
                     long pos = Objects.requireNonNull(wire.bytes().bytesStore()).addressForRead(0);
                     String s = Long.toHexString(pos);

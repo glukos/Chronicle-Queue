@@ -1063,7 +1063,7 @@ public class SingleChronicleQueueExcerpts {
                 releaseIfNotNullAndReferenced(w0.bytes(), this);
             wireForIndex = null;
             if (w0 != null)
-                assert w0.bytes().refCount() == 0;
+                assert w0.bytes().refCount() <= 1;
             queue.release(this, store);
             store = null;
         }

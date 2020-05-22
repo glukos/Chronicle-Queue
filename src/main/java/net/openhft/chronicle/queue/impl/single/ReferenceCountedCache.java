@@ -2,6 +2,7 @@ package net.openhft.chronicle.queue.impl.single;
 
 import net.openhft.chronicle.core.ReferenceCounted;
 import net.openhft.chronicle.core.ReferenceOwner;
+import net.openhft.chronicle.core.StackTrace;
 import net.openhft.chronicle.core.io.Closeable;
 import net.openhft.chronicle.core.util.ThrowingFunction;
 import org.jetbrains.annotations.NotNull;
@@ -21,6 +22,7 @@ public class ReferenceCountedCache<K, T extends ReferenceCounted, V, E extends T
     private final BiFunction<ReferenceOwner, T, V> transformer;
     private final ThrowingFunction<K, T, E> creator;
     private volatile boolean closed;
+    private StackTrace closedHere;
 
     public ReferenceCountedCache(BiFunction<ReferenceOwner, T, V> transformer, ThrowingFunction<K, T, E> creator) {
         this.transformer = transformer;
@@ -29,6 +31,8 @@ public class ReferenceCountedCache<K, T extends ReferenceCounted, V, E extends T
 
     @NotNull
     V get(ReferenceOwner owner, @NotNull final K key) throws E {
+        if (closed)
+            throw new IllegalStateException("Closed", closedHere);
 
         // remove all which have been dereferenced. Garbagey but rare
         cache.entrySet().removeIf(entry -> entry.getValue().refCount() == 0);
@@ -49,10 +53,8 @@ public class ReferenceCountedCache<K, T extends ReferenceCounted, V, E extends T
         if (closed)
             return;
         closed = true;
+        assert (closedHere = new StackTrace("Closed here")) != null;
 
-        for (T value : cache.values()) {
-            value.releaseLast();
-        }
         cache.clear();
     }
 }

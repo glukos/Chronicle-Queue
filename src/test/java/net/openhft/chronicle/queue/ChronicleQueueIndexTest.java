@@ -45,6 +45,7 @@ public class ChronicleQueueIndexTest {
                 firstCQFile = queue.file();
                 firstCQFile = requireNonNull(firstCQFile.listFiles((dir, name) -> name.endsWith(".cq4")))[0];
                 Assert.assertFalse(hasEOFAtEndOfFile(firstCQFile));
+
             } catch (Exception e) {
                 e.printStackTrace();
                 fail();

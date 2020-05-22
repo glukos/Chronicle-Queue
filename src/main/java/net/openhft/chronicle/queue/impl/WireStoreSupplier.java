@@ -23,8 +23,8 @@ import java.text.ParseException;
 import java.util.NavigableSet;
 
 public interface WireStoreSupplier {
-    default WireStore get(int cycle) {
-        return acquire(ReferenceOwner.INIT, cycle, false);
+    default WireStore get(ReferenceOwner owner, int cycle) {
+        return acquire(owner, cycle, false);
     }
 
     @Nullable

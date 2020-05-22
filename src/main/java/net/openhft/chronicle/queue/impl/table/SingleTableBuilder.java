@@ -17,6 +17,7 @@ package net.openhft.chronicle.queue.impl.table;
 
 import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.core.Jvm;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.io.IORuntimeException;
 import net.openhft.chronicle.core.util.StringUtils;
 import net.openhft.chronicle.queue.impl.TableStore;
@@ -33,10 +34,9 @@ import java.io.StreamCorruptedException;
 import java.nio.file.Path;
 import java.util.Objects;
 
-import static net.openhft.chronicle.core.ReferenceOwner.INIT;
 import static net.openhft.chronicle.core.pool.ClassAliasPool.CLASS_ALIASES;
 
-public class SingleTableBuilder<T extends Metadata> {
+public class SingleTableBuilder<T extends Metadata> implements ReferenceOwner {
 
     static {
         CLASS_ALIASES.addAlias(WireType.class);
@@ -95,11 +95,11 @@ public class SingleTableBuilder<T extends Metadata> {
         try {
             if (!readOnly && file.createNewFile() && !file.canWrite())
                 throw new IllegalStateException("Cannot write to tablestore file " + file);
-            MappedBytes bytes = MappedBytes.mappedBytes(INIT, file, 64 << 10, 0, readOnly);
+            MappedBytes bytes = MappedBytes.mappedBytes(this, file, 64 << 10, 0, readOnly);
             // eagerly initialize backing MappedFile page - otherwise wire.writeFirstHeader() will try to lock the file
             // to allocate the first byte store and that will cause lock overlap
             TableStore<T> tableStore = buildTableStore(bytes);
-            bytes.reserveTransfer(INIT, tableStore);
+            bytes.reserveTransfer(this, tableStore);
             return tableStore;
         } catch (IOException e) {
             throw new IORuntimeException("file=" + file.getAbsolutePath(), e);
