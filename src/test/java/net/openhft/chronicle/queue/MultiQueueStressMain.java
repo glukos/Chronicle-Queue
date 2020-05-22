@@ -30,7 +30,7 @@ public class MultiQueueStressMain {
             for (int i = 0; i < queueCount; i++) {
                 long start1 = System.currentTimeMillis();
                 String filename = baseDir + "/" + count++;
-                queues[i] = MappedBytes.mappedBytes(new File(filename), pagesPer10Second * (4 << 10));
+                queues[i] = MappedBytes.mappedBytes(new File(filename), pagesPer10Second * (4 << 10), OS.pageSize());
                 long time1 = System.currentTimeMillis() - start1;
                 if (time1 > 20)
                     System.out.printf("Creating %s took %.3f seconds%n", filename, time1 / 1e3);

@@ -69,7 +69,7 @@ public class SingleCQFormatTest {
         dir.mkdir();
 
         File file = new File(dir, "19700102" + SingleChronicleQueue.SUFFIX);
-        try (@NotNull MappedBytes bytes = MappedBytes.mappedBytes(file, 64 << 10)) {
+        try (@NotNull MappedBytes bytes = MappedBytes.mappedBytes(file, 64 << 10, OS.pageSize())) {
             bytes.write8bit("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>");
 
             try (@NotNull RollingChronicleQueue queue = binary(dir)
@@ -133,7 +133,7 @@ public class SingleCQFormatTest {
         dir.mkdirs();
         File file = new File(dir, "19700101" + SingleChronicleQueue.SUFFIX);
         file.createNewFile();
-        try (MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE)) {
+        try (MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE, OS.pageSize())) {
             bytes.writeInt(Wires.NOT_COMPLETE | Wires.META_DATA);
         }
         @Nullable ChronicleQueue queue = null;
@@ -163,8 +163,7 @@ public class SingleCQFormatTest {
         dir.mkdirs();
 
         File file = new File(dir, "19700101" + SingleChronicleQueue.SUFFIX);
-        try (MappedBytes bytes = MappedBytes.mappedBytes(file,
-                ChronicleQueue.TEST_BLOCK_SIZE * 2)) {
+        try (MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE * 2, OS.pageSize())) {
             @NotNull Wire wire = new BinaryWire(bytes);
             try (DocumentContext dc = wire.writingDocument(true)) {
                 dc.wire().writeEventName(() -> "header").typePrefix(SingleChronicleQueueStore.class).marshallable(w -> {
@@ -215,7 +214,7 @@ public class SingleCQFormatTest {
         dir.mkdir();
 
         File file = new File(dir, "19700101-02" + SingleChronicleQueue.SUFFIX);
-        try (MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE * 2)) {
+        try (MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE * 2, OS.pageSize())) {
             @NotNull Wire wire = new BinaryWire(bytes);
             try (DocumentContext dc = wire.writingDocument(true)) {
                 dc.wire().writeEventName(() -> "header").typedMarshallable(
@@ -258,7 +257,7 @@ public class SingleCQFormatTest {
         dir.mkdir();
 
         File file = new File(dir, "19700101" + SingleChronicleQueue.SUFFIX);
-        try (MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE)) {
+        try (MappedBytes bytes = MappedBytes.mappedBytes(file, ChronicleQueue.TEST_BLOCK_SIZE, OS.pageSize())) {
             @NotNull Wire wire = new BinaryWire(bytes);
             try (DocumentContext dc = wire.writingDocument(true)) {
                 dc.wire().writeEventName(() -> "header")

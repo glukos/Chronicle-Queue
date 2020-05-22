@@ -359,7 +359,7 @@ public class SingleChronicleQueueStore implements WireStore {
             }
         }
 
-        try (MappedBytes bytes = MappedBytes.mappedBytes(INIT, mappedFile.file(), mappedFile.chunkSize())) {
+        try (MappedBytes bytes = MappedBytes.mappedBytes(null, mappedFile.file(), mappedFile.chunkSize())) {
             Wire wire0 = WireType.valueOf(wire).apply(bytes);
             return writeEOFAndShrink(wire0, timeoutMS);
 
