@@ -1,8 +1,11 @@
-package net.openhft.chronicle.queue;
+/*
+ * Copyright (c) 2016-2019 Chronicle Software Ltd
+ */
 
-import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
-import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
-import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueExcerpts;
+package net.openhft.chronicle.queue.impl.single;
+
+import net.openhft.chronicle.queue.DirectoryUtils;
+import net.openhft.chronicle.queue.ExcerptTailer;
 import org.junit.Test;
 
 public class CloserJobRefCountOnCloseTest {
@@ -18,8 +21,8 @@ public class CloserJobRefCountOnCloseTest {
 
             ExcerptTailer tailer = temp.createTailer();
             String s = tailer.readText();
-            if (tailer instanceof SingleChronicleQueueExcerpts.StoreTailer) {
-                final SingleChronicleQueueExcerpts.StoreTailer storeTailer = (SingleChronicleQueueExcerpts.StoreTailer) tailer;
+            if (tailer instanceof StoreTailer) {
+                final StoreTailer storeTailer = (StoreTailer) tailer;
                 storeTailer.close();
             }
             ((Runnable) tailer::close).run();

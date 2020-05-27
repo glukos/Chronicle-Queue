@@ -23,6 +23,7 @@ import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.OS;
 import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.annotation.PackageLocal;
+import net.openhft.chronicle.core.io.AbstractCloseable;
 import net.openhft.chronicle.core.io.Closeable;
 import net.openhft.chronicle.core.threads.EventLoop;
 import net.openhft.chronicle.core.threads.ThreadLocalHelper;
@@ -48,16 +49,13 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.*;
 
 import static net.openhft.chronicle.core.io.Closeable.closeQuietly;
 import static net.openhft.chronicle.queue.TailerDirection.NONE;
-import static net.openhft.chronicle.queue.impl.single.SingleChronicleQueueExcerpts.StoreAppender;
-import static net.openhft.chronicle.queue.impl.single.SingleChronicleQueueExcerpts.StoreTailer;
 
-public class SingleChronicleQueue implements RollingChronicleQueue {
+public class SingleChronicleQueue extends AbstractCloseable implements RollingChronicleQueue {
 
     public static final String SUFFIX = ".cq4";
     public static final String QUEUE_METADATA_FILE = "metadata" + SingleTableStore.SUFFIX;
@@ -80,7 +78,6 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
     @NotNull
     final File path;
     final String fileAbsolutePath;
-    final AtomicBoolean isClosed = new AtomicBoolean();
     private final StoreSupplier storeSupplier;
     private final ThreadLocal<WeakReference<StoreTailer>> tlTailer = new ThreadLocal<>();
     @NotNull
@@ -608,16 +605,11 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         closers.put(key, closer);
     }
 
-    @Override
-    public boolean isClosed() {
-        return isClosed.get();
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public void close() {
 
-        if (isClosed.getAndSet(true))
+        if (isClosed())
             return;
 
         closeQuietly(
@@ -636,6 +628,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         }
         closers.forEach((k, v) -> v.accept(k));
         closeQuietly(storeSupplier);
+        super.close();
     }
 
     @Override
@@ -837,7 +830,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         }
     }
 
-    private class StoreSupplier implements WireStoreSupplier, Closeable {
+    private class StoreSupplier extends AbstractCloseable implements WireStoreSupplier {
         private final AtomicReference<CachedCycleTree> cachedTree = new AtomicReference<>();
         private final ReferenceCountedCache<File, MappedFile, MappedBytes, IOException> mappedFileCache =
                 new ReferenceCountedCache<>(MappedBytes::mappedBytes, SingleChronicleQueue.this::mappedFile);

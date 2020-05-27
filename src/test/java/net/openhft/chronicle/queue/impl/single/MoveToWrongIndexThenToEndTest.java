@@ -1,11 +1,16 @@
-package net.openhft.chronicle.queue;
+/*
+ * Copyright (c) 2016-2019 Chronicle Software Ltd
+ */
+
+package net.openhft.chronicle.queue.impl.single;
 
 import net.openhft.chronicle.bytes.Bytes;
 import net.openhft.chronicle.core.ReferenceOwner;
+import net.openhft.chronicle.queue.DirectoryUtils;
+import net.openhft.chronicle.queue.ExcerptAppender;
+import net.openhft.chronicle.queue.ExcerptTailer;
+import net.openhft.chronicle.queue.RollCycle;
 import net.openhft.chronicle.queue.impl.WireStore;
-import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
-import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
-import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueExcerpts;
 import net.openhft.chronicle.wire.UnrecoverableTimeoutException;
 import net.openhft.chronicle.wire.WireType;
 import org.junit.After;
@@ -130,8 +135,8 @@ public class MoveToWrongIndexThenToEndTest {
     private long getLastIndex(Path queuePath) {
         try (SingleChronicleQueue chronicle = createChronicle(queuePath)) {
 
-            SingleChronicleQueueExcerpts.StoreTailer tailer =
-                    new SingleChronicleQueueExcerpts.StoreTailer(chronicle);
+            StoreTailer tailer =
+                    new StoreTailer(chronicle);
 
             int firstCycle = chronicle.firstCycle();
             int lastCycle = chronicle.lastCycle();
@@ -159,7 +164,7 @@ public class MoveToWrongIndexThenToEndTest {
     }
 
     private long approximateLastIndex(int cycle, SingleChronicleQueue queue,
-                                      SingleChronicleQueueExcerpts.StoreTailer tailer) {
+                                      StoreTailer tailer) {
         try {
             ReferenceOwner temp = ReferenceOwner.temporary("approximateLastIndex");
             WireStore wireStore = queue.storeForCycle(temp, cycle, queue.epoch(), false);

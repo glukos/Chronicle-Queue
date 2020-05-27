@@ -57,8 +57,8 @@ public final class TailerSequenceRaceConditionTest {
     }
 
     private void attemptToMoveToTail(final ChronicleQueue queue) {
-        final SingleChronicleQueueExcerpts.StoreTailer tailer =
-                (SingleChronicleQueueExcerpts.StoreTailer) queue.createTailer();
+        final StoreTailer tailer =
+                (StoreTailer) queue.createTailer();
         try {
             tailer.toEnd();
         } catch (IllegalStateException e) {

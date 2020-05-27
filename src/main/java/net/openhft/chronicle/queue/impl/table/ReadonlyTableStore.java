@@ -19,6 +19,7 @@ package net.openhft.chronicle.queue.impl.table;
 
 import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.core.ReferenceOwner;
+import net.openhft.chronicle.core.StackTrace;
 import net.openhft.chronicle.core.values.LongValue;
 import net.openhft.chronicle.queue.impl.TableStore;
 import net.openhft.chronicle.wire.WireOut;
@@ -42,6 +43,21 @@ public class ReadonlyTableStore<T extends Metadata> implements TableStore<T> {
 
     @Override
     public void close() {
+    }
+
+    @Override
+    public void checkReferences() {
+
+    }
+
+    @Override
+    public boolean isClosed() {
+        return false;
+    }
+
+    @Override
+    public StackTrace closedHere() {
+        return null;
     }
 
     @Override

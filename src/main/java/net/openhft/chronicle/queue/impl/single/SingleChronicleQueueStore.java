@@ -17,7 +17,10 @@ package net.openhft.chronicle.queue.impl.single;
 
 import net.openhft.chronicle.bytes.MappedBytes;
 import net.openhft.chronicle.bytes.MappedFile;
-import net.openhft.chronicle.core.*;
+import net.openhft.chronicle.core.AbstractReferenceCounted;
+import net.openhft.chronicle.core.Jvm;
+import net.openhft.chronicle.core.Maths;
+import net.openhft.chronicle.core.ReferenceOwner;
 import net.openhft.chronicle.core.annotation.UsedViaReflection;
 import net.openhft.chronicle.core.io.Closeable;
 import net.openhft.chronicle.core.pool.ClassAliasPool;
@@ -38,7 +41,7 @@ import java.io.UncheckedIOException;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-public class SingleChronicleQueueStore implements WireStore {
+public class SingleChronicleQueueStore extends AbstractReferenceCounted implements WireStore {
     static {
         ClassAliasPool.CLASS_ALIASES.addAlias(SCQIndexing.class);
     }
@@ -51,8 +54,6 @@ public class SingleChronicleQueueStore implements WireStore {
     private final MappedBytes mappedBytes;
     @NotNull
     private final MappedFile mappedFile;
-    @NotNull
-    private final ReferenceCounted refCount;
     private final int dataVersion;
 
     @NotNull
@@ -73,7 +74,6 @@ public class SingleChronicleQueueStore implements WireStore {
             writePosition = loadWritePosition(wire);
             this.mappedBytes = (MappedBytes) (wire.bytes());
             this.mappedFile = mappedBytes.mappedFile();
-            this.refCount = ReferenceCounter.onReleased(this::onCleanup);
             this.indexing = Objects.requireNonNull(wire.read(MetaDataField.indexing).typedMarshallable());
             this.indexing.writePosition = writePosition;
             this.sequence = new RollCycleEncodeSequence(writePosition, rollIndexCount(), rollIndexSpacing());
@@ -103,7 +103,6 @@ public class SingleChronicleQueueStore implements WireStore {
                                      int indexSpacing) {
         this.mappedBytes = mappedBytes;
         this.mappedFile = mappedBytes.mappedFile();
-        this.refCount = ReferenceCounter.onReleased(this::onCleanup);
 
         indexCount = Maths.nextPower2(indexCount, 8);
         indexSpacing = Maths.nextPower2(indexSpacing, 1);
@@ -231,36 +230,6 @@ public class SingleChronicleQueueStore implements WireStore {
         return indexing.moveToEnd(w);
     }
 
-    @Override
-    public void reserve(ReferenceOwner id) throws IllegalStateException {
-        this.refCount.reserve(id);
-    }
-
-    @Override
-    public boolean tryReserve(ReferenceOwner id) {
-        return this.refCount.tryReserve(id);
-    }
-
-    @Override
-    public void release(ReferenceOwner id) throws IllegalStateException {
-        this.refCount.release(id);
-    }
-
-    @Override
-    public void releaseLast(ReferenceOwner id) {
-        this.refCount.releaseLast(id);
-    }
-
-    @Override
-    public int refCount() {
-        return this.refCount.refCount();
-    }
-
-    @Override
-    public void close() {
-        refCount.releaseLast();
-    }
-
     /**
      * @return creates a new instance of mapped bytes, because, for example the tailer and appender
      * can be at different locations.
@@ -289,7 +258,7 @@ public class SingleChronicleQueueStore implements WireStore {
                 "indexing=" + indexing +
                 ", writePosition/seq=" + writePosition.toString() +
                 ", mappedFile=" + mappedFile +
-                ", refCount=" + refCount +
+                ", refCount=" + refCount() +
                 '}';
     }
 
@@ -297,7 +266,7 @@ public class SingleChronicleQueueStore implements WireStore {
     // Marshalling
     // *************************************************************************
 
-    private void onCleanup() {
+    protected void performRelease() {
         Closeable.closeQuietly(writePosition);
         Closeable.closeQuietly(indexing);
         mappedBytes.releaseLast();

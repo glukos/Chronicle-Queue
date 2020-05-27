@@ -43,8 +43,8 @@ public class AcquireReleaseTest extends ChronicleQueueTestBase {
                     .storeFileListener(sfl)
                     .timeProvider(tp)
                     .build();
+            ExcerptAppender appender = queue.acquireAppender();
             for (int i = 0; i < 10; i++) {
-                ExcerptAppender appender = queue.acquireAppender();
                 appender
                         .writeDocument(w -> w.write("a")
                                 .marshallable(m ->
@@ -53,6 +53,7 @@ public class AcquireReleaseTest extends ChronicleQueueTestBase {
             }
             Assert.assertEquals(10, acount.get());
             Assert.assertEquals(9, qcount.get());
+            appender.close();
             queue.close();
         } finally {
             try {

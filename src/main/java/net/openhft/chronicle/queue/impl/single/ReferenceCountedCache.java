@@ -2,8 +2,7 @@ package net.openhft.chronicle.queue.impl.single;
 
 import net.openhft.chronicle.core.ReferenceCounted;
 import net.openhft.chronicle.core.ReferenceOwner;
-import net.openhft.chronicle.core.StackTrace;
-import net.openhft.chronicle.core.io.Closeable;
+import net.openhft.chronicle.core.io.AbstractCloseable;
 import net.openhft.chronicle.core.util.ThrowingFunction;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -17,12 +16,12 @@ import java.util.function.BiFunction;
  * <p>
  * Created by Jerry Shea on 27/04/18.
  */
-public class ReferenceCountedCache<K, T extends ReferenceCounted, V, E extends Throwable> implements ReferenceOwner, Closeable {
+public class ReferenceCountedCache<K, T extends ReferenceCounted, V, E extends Throwable>
+        extends AbstractCloseable
+        implements ReferenceOwner {
     private final Map<K, T> cache = new ConcurrentHashMap<>();
     private final BiFunction<ReferenceOwner, T, V> transformer;
     private final ThrowingFunction<K, T, E> creator;
-    private volatile boolean closed;
-    private StackTrace closedHere;
 
     public ReferenceCountedCache(BiFunction<ReferenceOwner, T, V> transformer, ThrowingFunction<K, T, E> creator) {
         this.transformer = transformer;
@@ -31,8 +30,7 @@ public class ReferenceCountedCache<K, T extends ReferenceCounted, V, E extends T
 
     @NotNull
     V get(ReferenceOwner owner, @NotNull final K key) throws E {
-        if (closed)
-            throw new IllegalStateException("Closed", closedHere);
+        checkIsNotClosed();
 
         // remove all which have been dereferenced. Garbagey but rare
         cache.entrySet().removeIf(entry -> entry.getValue().refCount() == 0);
@@ -52,9 +50,8 @@ public class ReferenceCountedCache<K, T extends ReferenceCounted, V, E extends T
     public void close() {
         if (closed)
             return;
-        closed = true;
-        assert (closedHere = new StackTrace("Closed here")) != null;
-
+        cache.values().forEach(ReferenceCounted::checkReferences);
         cache.clear();
+        super.close();
     }
 }

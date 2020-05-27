@@ -2,6 +2,7 @@ package net.openhft.chronicle.queue.impl.single;
 
 import net.openhft.chronicle.bytes.Bytes;
 import net.openhft.chronicle.core.Jvm;
+import net.openhft.chronicle.core.StackTrace;
 import net.openhft.chronicle.core.io.Closeable;
 import net.openhft.chronicle.queue.ExcerptAppender;
 import net.openhft.chronicle.threads.Threads;
@@ -21,7 +22,7 @@ public enum StoreComponentReferenceHandler implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StoreComponentReferenceHandler.class);
     private static final ReferenceQueue<ExcerptAppender> EXPIRED_THREAD_LOCAL_APPENDERS_QUEUE = new ReferenceQueue<>();
-    private static final ReferenceQueue<SingleChronicleQueueExcerpts.StoreTailer>
+    private static final ReferenceQueue<StoreTailer>
             EXPIRED_THREAD_LOCAL_TAILERS_QUEUE = new ReferenceQueue<>();
     private static final ScheduledExecutorService THREAD_LOCAL_CLEANER_EXECUTOR_SERVICE =
             Threads.acquireScheduledExecutorService(THREAD_NAME, true);
@@ -53,7 +54,7 @@ public enum StoreComponentReferenceHandler implements Closeable {
         return EXPIRED_THREAD_LOCAL_APPENDERS_QUEUE;
     }
 
-    static ReferenceQueue<SingleChronicleQueueExcerpts.StoreTailer> tailerQueue() {
+    static ReferenceQueue<StoreTailer> tailerQueue() {
         return EXPIRED_THREAD_LOCAL_TAILERS_QUEUE;
     }
 
@@ -126,5 +127,15 @@ public enum StoreComponentReferenceHandler implements Closeable {
         } catch (InterruptedException ignore) {
 
         }
+    }
+
+    @Override
+    public boolean isClosed() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StackTrace closedHere() {
+        throw new UnsupportedOperationException();
     }
 }

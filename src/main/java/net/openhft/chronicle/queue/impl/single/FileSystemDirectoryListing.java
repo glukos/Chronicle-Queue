@@ -1,9 +1,11 @@
 package net.openhft.chronicle.queue.impl.single;
 
+import net.openhft.chronicle.core.io.AbstractCloseable;
+
 import java.io.File;
 import java.util.function.ToIntFunction;
 
-final class FileSystemDirectoryListing implements DirectoryListing {
+final class FileSystemDirectoryListing extends AbstractCloseable implements DirectoryListing {
     private final File queueDir;
     private final ToIntFunction<File> fileToCycleFunction;
 

@@ -34,7 +34,7 @@ import org.junit.runners.Parameterized;
 import java.util.Arrays;
 import java.util.Collection;
 
-import static net.openhft.chronicle.queue.impl.single.SingleChronicleQueueExcerpts.StoreTailer.INDEXING_LINEAR_SCAN_THRESHOLD;
+import static net.openhft.chronicle.queue.impl.single.StoreTailer.INDEXING_LINEAR_SCAN_THRESHOLD;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
@@ -119,8 +119,8 @@ public class IndexTest extends ChronicleQueueTestBase {
                 }
             }
 
-            final SingleChronicleQueueExcerpts.StoreTailer tailer =
-                    (SingleChronicleQueueExcerpts.StoreTailer) queue.createTailer();
+            final StoreTailer tailer =
+                    (StoreTailer) queue.createTailer();
             tailer.moveToIndex(indices[0]);
 
             assertThat(tailer.index(), is(indices[0]));

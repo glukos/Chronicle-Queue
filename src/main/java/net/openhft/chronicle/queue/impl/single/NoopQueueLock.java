@@ -17,7 +17,18 @@
  */
 package net.openhft.chronicle.queue.impl.single;
 
+import net.openhft.chronicle.core.StackTrace;
+
 public class NoopQueueLock implements QueueLock {
+    @Override
+    public boolean isClosed() {
+        return false;
+    }
+
+    @Override
+    public StackTrace closedHere() {
+        return null;
+    }
 
     @Override
     public void waitForLock() {

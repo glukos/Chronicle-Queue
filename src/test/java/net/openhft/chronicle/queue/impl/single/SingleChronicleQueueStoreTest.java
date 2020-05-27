@@ -35,7 +35,7 @@ public class SingleChronicleQueueStoreTest {
             final SCQIndexing indexing = wireStore.indexing;
             for (int i = 0; i < RECORD_COUNT; i++) {
                 final int startLinearScanCount = indexing.linearScanCount;
-                final ScanResult scanResult = indexing.moveToIndex((SingleChronicleQueueExcerpts.StoreTailer) queue.createTailer(), indices[i]);
+                final ScanResult scanResult = indexing.moveToIndex((StoreTailer) queue.createTailer(), indices[i]);
                 assertThat(scanResult, is(expectedScanResult));
 
                 if (shouldBeIndexed.apply(i)) {

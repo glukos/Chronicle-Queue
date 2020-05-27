@@ -86,7 +86,7 @@ public class MultiThreadedRollTest {
                 });
 
                 timeProvider.currentTimeMillis(2000);
-                ((SingleChronicleQueueExcerpts.StoreAppender) wqueue.acquireAppender())
+                ((StoreAppender) wqueue.acquireAppender())
                         .writeEndOfCycleIfRequired();
                 Jvm.pause(200);
                 wqueue.acquireAppender().writeText("hello world");

@@ -46,7 +46,7 @@ public class WireStorePool implements StoreReleasable {
         if (isClosed)
             return;
         isClosed = true;
-        closedHere = Jvm.isReferenceTracing() ? new StackTrace() : null;
+        closedHere = Jvm.isResourceTracing() ? new StackTrace() : null;
     }
 
     @Nullable
