@@ -210,7 +210,7 @@ public class RollEOFTest extends QueueTestCommon {
             ExcerptAppender excerptAppender = queue.acquireAppender();
 
             try (DocumentContext dc = excerptAppender.writingDocument(false)) {
-                dc.wire().write(() -> "test").int64(0);
+                dc.wire().write("test").int64(0);
             }
         }
     }
