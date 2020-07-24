@@ -43,11 +43,7 @@ public class DirectoryUtils {
     }
 
     public static void deleteDir(@NotNull File dir) {
-        try {
-            IOTools.deleteDirWithFiles(dir, 20);
-        } catch (Throwable e) {
-            e.printStackTrace();
-        }
+        IOTools.deleteDirWithFiles(dir);
     }
 
     enum DeleteStatic {
@@ -55,6 +51,7 @@ public class DirectoryUtils {
         final Set<File> toDeleteList = Collections.synchronizedSet(new LinkedHashSet<>());
 
         {
+            // TODO: should not need to do this now
             Runtime.getRuntime().addShutdownHook(new Thread(
                     () -> toDeleteList.forEach(DirectoryUtils::deleteDir)
             ));
