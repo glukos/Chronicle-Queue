@@ -241,11 +241,7 @@ public class SingleChronicleQueueStore extends AbstractCloseable implements Wire
         Closeable.closeQuietly(indexing);
 
         mappedBytes.release(INIT);
-        try {
-            mappedFile.release(this);
-        } catch (IllegalStateException e) {
-            e.printStackTrace();
-        }
+        mappedFile.release(this);
     }
 
     /**
