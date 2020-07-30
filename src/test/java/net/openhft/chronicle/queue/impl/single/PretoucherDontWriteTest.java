@@ -13,6 +13,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.stream.IntStream.range;
+import static net.openhft.chronicle.core.Maths.assertBetween;
+import static net.openhft.chronicle.queue.DirectoryUtils.tempDir;
 import static org.junit.Assert.assertEquals;
 
 public class PretoucherDontWriteTest extends ChronicleQueueTestBase {
@@ -30,13 +32,13 @@ public class PretoucherDontWriteTest extends ChronicleQueueTestBase {
              final SingleChronicleQueue pretoucherQueue = PretoucherTest.createQueue(dir, clock::get);
              final Pretoucher pretoucher = new Pretoucher(pretoucherQueue, chunkListener, capturedCycles::add)) {
 
-            range(0, 10).forEach(i -> {
-                try (final DocumentContext ctx = queue.acquireAppender().writingDocument()) {
-                    assertEquals(i + 0.5, capturedCycles.size(), 0.5);
-                    ctx.wire().write().int32(i);
-                    ctx.wire().write().bytes(new byte[1024]);
-                }
-                try {
+    range(0, 10).forEach(i -> {
+        try (final DocumentContext ctx = queue.acquireAppender().writingDocument()) {
+            assertBetween(i, i + 1, capturedCycles.size());
+            ctx.wire().write().int32(i);
+            ctx.wire().write().bytes(new byte[1024]);
+        }
+        try {
                     pretoucher.execute();
                 } catch (InvalidEventHandlerException e) {
                     throw Jvm.rethrow(e);
@@ -48,10 +50,10 @@ public class PretoucherDontWriteTest extends ChronicleQueueTestBase {
                 } catch (InvalidEventHandlerException e) {
                     throw Jvm.rethrow(e);
                 }
-                assertEquals(i + 1.5, capturedCycles.size(), 0.5);
+        assertBetween(i + 1, i + 2, capturedCycles.size());
             });
 
-            assertEquals(10.5, capturedCycles.size(), 0.5);
+    assertBetween(10, 11, capturedCycles.size());
         }
     }
 }

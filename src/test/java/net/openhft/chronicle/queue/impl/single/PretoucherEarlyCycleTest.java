@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.stream.IntStream.range;
+import static net.openhft.chronicle.core.Maths.assertBetween;
+import static net.openhft.chronicle.queue.DirectoryUtils.tempDir;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
@@ -55,10 +57,10 @@ public class PretoucherEarlyCycleTest extends ChronicleQueueTestBase {
                     throw Jvm.rethrow(e);
                 }
                 clock.addAndGet(50 + earlyMillis);
-                assertEquals(i + 1.5, capturedCycles.size(), 0.5);
+                assertBetween(i + 1, i + 2, capturedCycles.size());
             });
 
-            assertEquals(10.5, capturedCycles.size(), 0.5);
+            assertBetween(10, 11, capturedCycles.size());
             assertFalse(chunkListener.chunkMap.isEmpty());
         }
     }
