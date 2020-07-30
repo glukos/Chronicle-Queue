@@ -52,6 +52,7 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.*;
 
@@ -895,7 +896,7 @@ public class SingleChronicleQueue extends AbstractCloseable implements RollingCh
                     } else {
                         try {
                             wire.readFirstHeader(timeoutMS, TimeUnit.MILLISECONDS);
-                        } catch (StreamCorruptedException e) {
+                        } catch (TimeoutException e) {
 
                             headerRecovery(that, mappedBytes, wire, bytes, cycle);
                             return acquire(cycle, createIfAbsent);
