@@ -2,6 +2,7 @@ package net.openhft.chronicle.queue.impl.single;
 
 import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.io.AbstractReferenceCounted;
+import net.openhft.chronicle.core.io.IOTools;
 import net.openhft.chronicle.core.onoes.ExceptionKey;
 import net.openhft.chronicle.core.onoes.LogLevel;
 import net.openhft.chronicle.core.threads.ThreadDump;
@@ -14,17 +15,12 @@ import net.openhft.chronicle.wire.ValueIn;
 import net.openhft.chronicle.wire.ValueOut;
 import org.jetbrains.annotations.NotNull;
 import org.junit.*;
-import org.junit.rules.TestRule;
-import org.junit.runner.Description;
-import org.junit.runners.model.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +33,7 @@ import static net.openhft.chronicle.core.io.Closeable.closeQuietly;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class RollCycleMultiThreadStressTest extends ChronicleQueueTestBase {
+public class RollCycleMultiThreadStressTest {
     static {
         Jvm.disableDebugHandler();
     }
@@ -60,8 +56,6 @@ public class RollCycleMultiThreadStressTest extends ChronicleQueueTestBase {
     final Logger LOG = LoggerFactory.getLogger(getClass());
     final SetTimeProvider timeProvider = new SetTimeProvider();
     private ChronicleQueue sharedWriterQueue;
-    @Rule
-    public RepeatRule repeatRule = new RepeatRule();
 
     public RollCycleMultiThreadStressTest() {
         SLEEP_PER_WRITE_NANOS = Long.getLong("writeLatency", 30_000);
@@ -77,10 +71,13 @@ public class RollCycleMultiThreadStressTest extends ChronicleQueueTestBase {
         READERS_READ_ONLY = Jvm.getBoolean("read_only");
         DUMP_QUEUE = Jvm.getBoolean("dump_queue");
         SHARED_WRITE_QUEUE = Jvm.getBoolean("sharedWriteQ");
-        System.setProperty("org.slf4j.simpleLogger.showDateTime", "true");
 
-        System.setProperty("org.slf4j.simpleLogger.dateTimeFormat", "HH:mm:ss.SSS");
-        System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "WARN");
+        if (TEST_TIME > 2) {
+            AbstractReferenceCounted.disableReferenceTracing();
+            if (Jvm.isResourceTracing()) {
+                throw new IllegalStateException("This test will run out of memory - change your system properties");
+            }
+        }
     }
 
     static boolean areAllReadersComplete(final int expectedNumberOfMessages, final List<Reader> readers) {
@@ -100,7 +97,7 @@ public class RollCycleMultiThreadStressTest extends ChronicleQueueTestBase {
     @Test
     public void stress() throws InterruptedException, IOException {
 
-        File file = getTmpDir();
+        File file = DirectoryUtils.tempDir("stress");
 //        System.out.printf("Queue dir: %s at %s%n", file.getAbsolutePath(), Instant.now());
         final int numThreads = CORES;
         final int numWriters = numThreads / 4 + 1;
@@ -273,6 +270,8 @@ public class RollCycleMultiThreadStressTest extends ChronicleQueueTestBase {
                 }
             });
         }
+
+        IOTools.deleteDirWithFiles("stress");
 //        System.out.println("Test complete");
     }
 
@@ -317,46 +316,6 @@ public class RollCycleMultiThreadStressTest extends ChronicleQueueTestBase {
         }
         Jvm.resetExceptionHandlers();
         AbstractReferenceCounted.assertReferencesReleased();
-    }
-
-    public static class RepeatRule implements TestRule {
-
-        @Override
-        public Statement apply(Statement statement, Description description) {
-            Statement result = statement;
-            RepeatRule.Repeat repeat = description.getAnnotation(RepeatRule.Repeat.class);
-            if (repeat != null) {
-                int times = repeat.times();
-                result = new RepeatRule.RepeatStatement(times, statement);
-            }
-            return result;
-        }
-
-        @Retention(RetentionPolicy.RUNTIME)
-        @Target({
-                java.lang.annotation.ElementType.METHOD
-        })
-        public @interface Repeat {
-            int times();
-        }
-
-        private static class RepeatStatement extends Statement {
-
-            private final int times;
-            private final Statement statement;
-
-            private RepeatStatement(int times, Statement statement) {
-                this.times = times;
-                this.statement = statement;
-            }
-
-            @Override
-            public void evaluate() throws Throwable {
-                for (int i = 0; i < times; i++) {
-                    statement.evaluate();
-                }
-            }
-        }
     }
 
     final class Reader implements Callable<Throwable> {
@@ -439,9 +398,11 @@ public class RollCycleMultiThreadStressTest extends ChronicleQueueTestBase {
                 }
             } catch (Throwable e) {
                 exception = e;
+                LOG.info("Finished reader", e);
                 return e;
             }
 
+            LOG.info("Finished reader OK");
             return null;
         }
     }
@@ -476,10 +437,12 @@ public class RollCycleMultiThreadStressTest extends ChronicleQueueTestBase {
                     loopIteration++;
 
                     if (value >= expectedNumberOfMessages) {
+                        LOG.info("Finished writer");
                         return null;
                     }
                 }
             } catch (Throwable e) {
+                LOG.info("Finished writer", e);
                 exception = e;
                 return e;
             } finally {
@@ -534,5 +497,9 @@ public class RollCycleMultiThreadStressTest extends ChronicleQueueTestBase {
             }
             return null;
         }
+    }
+
+    public static void main(String[] args) throws IOException, InterruptedException {
+        new RollCycleMultiThreadStressTest().stress();
     }
 }
