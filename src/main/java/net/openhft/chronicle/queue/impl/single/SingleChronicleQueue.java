@@ -897,7 +897,8 @@ public class SingleChronicleQueue extends AbstractCloseable implements RollingCh
                         try {
                             wire.readFirstHeader(timeoutMS, TimeUnit.MILLISECONDS);
                         } catch (TimeoutException e) {
-
+                            if (readOnly)
+                                throw e;
                             headerRecovery(that, mappedBytes, wire, bytes, cycle);
                             return acquire(cycle, createIfAbsent);
                         }
