@@ -2793,10 +2793,10 @@ public class SingleChronicleQueueTest extends ChronicleQueueTestBase {
                                  .build();
                  ExcerptAppender excerptAppender = q.acquireAppender()) {
 
-                excerptAppender.writeMessage(() -> "one", 1);
-                excerptAppender.writeMessage(() -> "two", 2);
-                excerptAppender.writeMessage(() -> "three", 3);
-                excerptAppender.writeMessage(() -> "four", 4);
+                excerptAppender.writeMessage("one", 1);
+                excerptAppender.writeMessage("two", 2);
+                excerptAppender.writeMessage("three", 3);
+                excerptAppender.writeMessage("four", 4);
             }
         }
         {
